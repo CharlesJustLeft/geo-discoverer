@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GEO Discoverer | AI Brand Visibility</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;700;800&display=swap" rel="stylesheet">
+  <style>
+    body{background-color:#0E1117;color:#FAFAFA;font-family:'Inter',sans-serif;overflow-x:hidden;background-image:linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px);background-size:50px 50px}
+    h1,h2,h3,.font-heading{font-family:'Space Grotesk',sans-serif}
+    .system-badge{font-family:'Space Grotesk',monospace;background:rgba(37,99,235,0.1);color:#60A5FA;border:1px solid rgba(37,99,235,0.2);padding:.5rem 1rem;border-radius:4px;display:inline-block;font-size:.8rem;letter-spacing:.05em;margin-bottom:1.5rem}
+    .hero-title{font-size:4rem;line-height:1;font-weight:800;letter-spacing:-.03em}
+    .highlight-blue{color:#3B82F6;position:relative;z-index:1}
+    .highlight-blue::after{content:'';position:absolute;bottom:10%;left:-5%;width:110%;height:30%;background:rgba(59,130,246,0.2);z-index:-1;transform:rotate(-2deg)}
+    .input-card{background-color:#161B22;border:1px solid #30363D;box-shadow:0 20px 40px -10px rgba(0,0,0,0.5);backdrop-filter:blur(10px)}
+    input,textarea,select{background-color:#0d1117;border:1px solid #30363D;color:white;transition:all .2s}
+    input:focus,textarea:focus,select:focus{border-color:#3B82F6;box-shadow:0 0 0 2px rgba(59,130,246,0.2);outline:none}
+    .vibrant-button{background:#2563EB;color:white;font-family:'Space Grotesk',sans-serif;font-weight:700;border-radius:9999px;transition:all .2s ease;box-shadow:0 4px 14px 0 rgba(37,99,235,0.39)}
+    .vibrant-button:hover{background:#1D4ED8;transform:translateY(-2px);box-shadow:0 6px 20px rgba(37,99,235,0.23)}
+    .secondary-button{background:transparent;color:#9CA3AF;border:1px solid #374151;font-family:'Inter',sans-serif;font-weight:600;border-radius:9999px;transition:all .2s ease}
+    .secondary-button:hover{color:white;border-color:#6B7280;background:rgba(255,255,255,0.05)}
+    .metric-card{background-color:#1F2937;border:1px solid #374151;transition:transform .2s}
+    .metric-card:hover{transform:translateY(-5px)}
+    .geo-table th{background-color:#1F2937;color:#9CA3AF;font-family:'Space Grotesk',sans-serif;font-size:.9rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #374151}
+    .geo-table td{border-bottom:1px solid #374151;padding-top:1rem;padding-bottom:1rem}
+    .geo-table tr:hover td{background-color:#1c2128}
+    .shape{position:absolute;opacity:.6;animation:float 6s ease-in-out infinite;z-index:-1}
+    .shape-1{top:10%;left:5%;width:40px;height:40px;background:#EF4444;transform:rotate(15deg)}
+    .shape-2{top:20%;right:10%;width:30px;height:30px;background:#F59E0B;border-radius:50%;animation-delay:1s}
+    .shape-3{bottom:15%;left:15%;width:50px;height:50px;background:#3B82F6;clip-path:polygon(50% 0%,0% 100%,100% 100%);animation-delay:2s}
+    @keyframes float{0%{transform:translateY(0) rotate(0)}50%{transform:translateY(-20px) rotate(10deg)}100%{transform:translateY(0) rotate(0)}}
+    .fade-in{animation:fadeIn .6s cubic-bezier(0.16,1,0.3,1)}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    .hidden{display:none}
+    .code-window{background:#0D1117;border:1px solid #30363D;border-radius:8px;font-family:'Monaco',monospace;font-size:.85rem;position:relative}
+    .code-header{padding:.5rem 1rem;border-bottom:1px solid #30363D;display:flex;gap:6px}
+    .dot{width:10px;height:10px;border-radius:50%}
+    .dot-red{background:#FF5F56}
+    .dot-yellow{background:#FFBD2E}
+    .dot-green{background:#27C93F}
+  </style>
+</head>
+<body class="min-h-screen flex flex-col relative">
+  <div class="shape shape-1"></div>
+  <div class="shape shape-2"></div>
+  <div class="shape shape-3"></div>
+  <nav class="w-full p-6 flex justify-between items-center max-w-7xl mx-auto z-10 relative">
+    <div class="text-xl font-bold font-heading tracking-tight flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity" id="brand-reset">
+      <span class="text-2xl">🕵️‍♀️</span> GEO Discoverer
+    </div>
+    <div class="text-sm text-gray-400 font-mono flex gap-3 items-center">
+      <span class="hidden md:inline opacity-50">POWERED BY GEMINI 3</span>
+      <span class="bg-blue-900/30 text-blue-400 px-2 py-1 rounded text-xs border border-blue-900">v1.0 BETA</span>
+    </div>
+  </nav>
+  <div id="view-home" class="flex-grow flex flex-col lg:flex-row items-center justify-center max-w-7xl mx-auto w-full px-6 pb-12 fade-in z-10 relative gap-12 h-full">
+    <div class="flex-1 text-left">
+      <div class="system-badge mb-6">> SYSTEM_READY // AI_DISCOVERY_MODULE</div>
+      <h1 class="hero-title mb-6 text-white">REVERSE ENGINEER<br>YOUR <span class="highlight-blue">AI VISIBILITY</span></h1>
+      <p class="text-gray-400 text-lg max-w-lg leading-relaxed mb-8">Stop guessing keywords. We simulate Ghost Payloads to reveal exactly who finds your brand on ChatGPT, and how.</p>
+      <div class="flex flex-wrap gap-4 text-sm font-mono text-gray-500">
+        <div class="flex items-center gap-2"><span class="text-green-500">✓</span> 25 Parallel Sims</div>
+        <div class="flex items-center gap-2"><span class="text-green-500">✓</span> Agentic Evals</div>
+        <div class="flex items-center gap-2"><span class="text-green-500">✓</span> Context Simulator</div>
+      </div>
+    </div>
+    <div class="flex-1 w-full max-w-md">
+      <div class="input-card rounded-2xl p-8 w-full">
+        <div class="mb-6 pb-4 border-b border-gray-800">
+          <h3 class="text-lg font-bold text-white mb-1">Run Discovery Audit</h3>
+          <p class="text-xs text-gray-400">Enter your details to start the agentic workflow.</p>
+        </div>
+        <form id="discoveryForm">
+          <div class="space-y-5">
+            <div>
+              <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Target Brand *</label>
+              <input type="text" id="companyName" value="Tanka.ai" class="w-full rounded-lg p-4 text-base focus:ring-2 focus:ring-blue-500 bg-[#0d1117] border-gray-700 text-white placeholder-gray-600" placeholder="e.g. Tanka.ai" required>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Website URL</label>
+              <input type="url" id="websiteUrl" value="https://tanka.ai" class="w-full rounded-lg p-4 text-base focus:ring-2 focus:ring-blue-500 bg-[#0d1117] border-gray-700 text-white placeholder-gray-600">
+            </div>
+            <button type="submit" class="vibrant-button w-full py-4 text-lg mt-2 flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20">Start Simulation <span>→</span></button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div id="view-loading" class="hidden flex-grow flex flex-col items-center justify-center p-4 z-10 relative h-full">
+    <div class="w-full max-w-xl text-center">
+      <div class="system-badge mb-8 animate-pulse">> RUNNING_AGENTS // <span id="loadingBrandName">TARGET</span></div>
+      <div class="input-card rounded-2xl p-8 text-left space-y-6">
+        <div id="log-container" class="space-y-4 font-mono text-sm h-48 overflow-y-auto"></div>
+        <div class="w-full bg-gray-800 rounded-full h-1 mt-8 overflow-hidden">
+          <div id="progressBar" class="bg-blue-500 h-1 progress-fill" style="width:0%"></div>
+        </div>
+      </div>
+      <p class="text-gray-500 text-sm mt-6 animate-pulse">Injecting System Prompts & Context Vectors...</p>
+    </div>
+  </div>
+  <div id="view-dashboard" class="hidden flex-grow p-6 md:p-12 max-w-7xl mx-auto w-full fade-in z-10 relative h-full">
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 border-b border-gray-800 pb-8">
+      <div>
+        <div class="system-badge mb-2">> REPORT_GENERATED</div>
+        <h1 class="text-4xl font-bold font-heading">Visibility Report: <span id="dashBrandName" class="text-white">Tanka.ai</span></h1>
+      </div>
+      <div class="flex gap-3 mt-4 md:mt-0">
+        <button id="downloadBtn" class="secondary-button px-4 py-2 text-sm flex items-center gap-2">Download PDF</button>
+        <button id="newBtn" class="vibrant-button px-6 py-2 text-sm">+ New Analysis</button>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+      <div class="metric-card rounded-xl p-6 relative overflow-hidden group">
+        <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity text-6xl">🏆</div>
+        <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Winning Persona</div>
+        <div id="dynamic-winning-persona" class="text-2xl font-bold text-white font-heading"></div>
+        <div class="text-xs text-green-400 mt-3 font-mono bg-green-400/10 inline-block px-2 py-1 rounded">HIGH CONFIDENCE</div>
+      </div>
+      <div class="metric-card rounded-xl p-6 relative overflow-hidden group">
+        <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity text-6xl">📈</div>
+        <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Discovery Rate</div>
+        <div id="dynamic-discovery-rate" class="text-2xl font-bold text-white font-heading"></div>
+        <div class="text-xs text-blue-400 mt-3 font-mono bg-blue-400/10 inline-block px-2 py-1 rounded">STABLE CONTEXT</div>
+      </div>
+      <div class="metric-card rounded-xl p-6 relative overflow-hidden group">
+        <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity text-6xl">⚔️</div>
+        <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Main Rival</div>
+        <div id="dynamic-competitor" class="text-2xl font-bold text-white font-heading"></div>
+        <div class="text-xs text-yellow-500 mt-3 font-mono bg-yellow-500/10 inline-block px-2 py-1 rounded">CO-OCCURRENCE: HIGH</div>
+      </div>
+    </div>
+    <div class="mb-12">
+      <h3 class="text-2xl font-bold font-heading mb-2">Discovery Paths</h3>
+      <p class="text-gray-400 mb-6">We simulated 5 User Personas to find your "Golden Path".</p>
+      <div class="overflow-hidden rounded-xl border border-gray-800 bg-[#161B22]">
+        <table class="w-full text-left border-collapse geo-table">
+          <thead>
+            <tr>
+              <th class="p-5 pl-6">Persona</th>
+              <th class="p-5">Trigger Prompt</th>
+              <th class="p-5">Frequency</th>
+              <th class="p-5">Attribution</th>
+              <th class="p-5">Competitors</th>
+            </tr>
+          </thead>
+          <tbody class="text-sm text-gray-300" id="results-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="mb-20" id="debugger"></div>
+    <div class="text-center pb-8">
+      <div class="text-gray-600 text-xs uppercase tracking-widest">GEO Discoverer v1.0 • Hackathon Edition</div>
+    </div>
+  </div>
+  <script>
+    const views={home:document.getElementById('view-home'),loading:document.getElementById('view-loading'),dashboard:document.getElementById('view-dashboard')};
+    function switchView(v){Object.values(views).forEach(el=>el.classList.add('hidden'));views[v].classList.remove('hidden');if(v==='dashboard'){document.body.classList.remove('overflow-hidden')}}
+    function setProgress(p){document.getElementById('progressBar').style.width=p+'%'}
+    function addLog(t){const c=document.getElementById('log-container');const d=document.createElement('div');d.className='flex items-center gap-3 fade-in';d.innerHTML='<span class="text-blue-500 font-bold">></span> <span class="text-gray-300">'+t+'</span>';c.appendChild(d);c.scrollTop=c.scrollHeight}
+    async function createJob(brand,site){const r=await fetch('/api/discover',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brand_name:brand,website_url:site})});if(!r.ok)throw new Error('job create failed');return r.json()}
+    function streamLogs(job_id){return new Promise((resolve)=>{const es=new EventSource('/api/discover/stream?job_id='+job_id);let i=0;es.onmessage=(e)=>{const m=e.data||'';if(m.startsWith('> COMPLETED')){es.close();resolve(true)}else if(m.startsWith('> FAILED')){es.close();resolve(false)}else{addLog(m);i++;setProgress(Math.min(100,20+i*5))}}})}
+    async function fetchResult(job_id){const r=await fetch('/api/discover/result?job_id='+job_id);if(!r.ok)throw new Error('result fetch failed');return r.json()}
+    function renderResults(res){document.getElementById('dashBrandName').innerText=res.brand_name;document.getElementById('dynamic-winning-persona').innerText=res.top_persona||'';document.getElementById('dynamic-discovery-rate').innerText=res.highest_win_rate||'';document.getElementById('dynamic-competitor').innerText=res.top_competitor||'';const tbody=document.getElementById('results-table-body');tbody.innerHTML='';(res.paths||[]).forEach(p=>{const tr=document.createElement('tr');tr.className='group cursor-pointer transition-colors';const barPct=Math.round(100*p.frequency_count/p.frequency_total);tr.innerHTML=`<td class="p-5 pl-6 font-medium text-white"><div class="flex items-center gap-3"><span class="w-2 h-2 rounded-full bg-green-500"></span>${p.persona_name}</div></td><td class="p-5 font-mono text-xs text-blue-300">${p.trigger_prompt}</td><td class="p-5"><div class="flex items-center gap-2"><div class="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden"><div class="h-full bg-green-500" style="width:${barPct}%"></div></div><span class="text-xs font-bold text-green-500">${p.frequency_count}/${p.frequency_total}</span></div></td><td class="p-5 text-xs">${p.attribution}</td><td class="p-5 text-xs">${(p.competitors||[]).join(', ')}</td>`;tbody.appendChild(tr)});const dbg=document.getElementById('debugger');dbg.innerHTML='';(res.debug||[]).forEach((d,i)=>{const details=document.createElement('details');details.className='mb-4 group';details.open=i===0;details.innerHTML=`<summary class="p-4 bg-[#161B22] rounded-lg flex items-center justify-between border border-gray-800 hover:border-gray-600 transition-all"><div class="flex items-center gap-3"><span class="text-green-500 font-bold">✅ Analysis</span></div><div class="text-green-400 text-xs font-mono font-bold border border-green-900 bg-green-900/20 px-2 py-1 rounded">VISIBILITY</div></summary><div class="p-6 bg-[#0D1117] border-x border-b border-gray-800 rounded-b-lg"><div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div><div class="text-xs text-gray-500 font-bold uppercase mb-2 tracking-wider">System Injection (Memory)</div><div class="code-window p-4 text-green-300 leading-relaxed"><div class="code-header mb-3 -mx-4 -mt-4"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div></div>${d.hidden_memory.replace(/\n/g,'<br>')}</div></div><div><div class="text-xs text-gray-500 font-bold uppercase mb-2 tracking-wider">User Trigger</div><div class="code-window p-4 text-blue-300 leading-relaxed"><div class="code-header mb-3 -mx-4 -mt-4"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div></div>${d.trigger_prompt}</div></div></div></div>`;dbg.appendChild(details)})}
+    async function startSimulation(e){e.preventDefault();const brand=document.getElementById('companyName').value;const site=document.getElementById('websiteUrl').value;document.getElementById('loadingBrandName').innerText=brand;document.getElementById('dashBrandName').innerText=brand;switchView('loading');try{const {job_id}=await createJob(brand,site);const ok=await streamLogs(job_id);if(!ok){addLog('Simulation failed');return}const res=await fetchResult(job_id);switchView('dashboard');renderResults(res)}catch(err){addLog('Error: '+String(err))}}
+    document.getElementById('discoveryForm').addEventListener('submit',startSimulation);
+    document.getElementById('newBtn').addEventListener('click',()=>{document.getElementById('log-container').innerHTML='';setProgress(0);document.getElementById('discoveryForm').reset();switchView('home')});
+    document.getElementById('downloadBtn').addEventListener('click',()=>{alert('Downloading report...')});
+    document.getElementById('brand-reset').addEventListener('click',()=>{document.getElementById('discoveryForm').reset();switchView('home')});
+  </script>
+</body>
+</html>
