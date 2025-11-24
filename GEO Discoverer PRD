@@ -1,0 +1,84 @@
+Product Requirements Document (PRD)
+
+Project Name: GEO Discoverer (The Context Simulator)
+Version: 2.0 (Browsing-Enabled)
+Status: In Development
+Tagline: "Discover exactly who finds your brand on AI, and how."
+
+1. Executive Summary & Context
+
+<!-- (Same as before) -->
+
+1.3 The Solution (GEO Discoverer)
+
+GEO Discoverer is a diagnostic simulation engine. It simulates a "Browsing Agent" (like ChatGPT with Search) to reverse-engineer the specific Personas and Prompts that lead to your brand, even if you are not in the model's training data.
+
+4. Backend Architecture (The "Browsing" Upgrade)
+
+5.1 The Orchestrator (Main Logic)
+
+Language: Python.
+
+Concurrency: asyncio for parallel execution.
+
+External API: Tavily API (or Bing Search) is REQUIRED to simulate the "Browsing" capability of modern LLMs.
+
+5.2 Step 1: The "Discovery" Agent (With Browsing)
+
+Problem: Standard GPT-4o doesn't know new brands.
+
+Solution: We give the agent a search_web tool.
+
+Prompt:
+
+"You are a Market Research AI.
+User Input: '{brand_name} ({website})'.
+Task 1: Use the search_web tool to learn what this brand does, who its competitors are, and where it is mentioned (Reddit, Blogs, etc.).
+Task 2: Based on this live data, reverse-engineer 5 User Personas who would search for this solution."
+
+Mechanism:
+
+LLM calls tavily_search(query="{brand_name} reviews").
+
+Tavily returns: "Tanka.ai is an AI co-founder..." + "Source: Reddit".
+
+LLM uses this context to generate the 5 Personas.
+
+5.3 Step 2: The "Ghost Payload" Simulator (The Stress Test)
+
+Goal: Validate if these personas trigger a recommendation when browsing is available.
+
+Action: Spawn 25 async API calls.
+
+System Prompt Injection:
+
+"You are a helpful assistant with access to real-time information.
+[USER MEMORY INJECTION]: {Candidate.hidden_memory}"
+
+Logic: We simulate the exact conditions of a user asking ChatGPT (which has browsing).
+
+5.4 Step 3: Source Attribution (The Truth)
+
+Action: Since we used a Search Tool (Tavily), we know exactly which URL provided the answer.
+
+Output: "Source: reddit.com/r/startups/comments/123 (Found via Search)".
+
+5. Prompts Reference
+
+6.1 Phase 1: Discovery Prompt (With Tools)
+
+You are a "Reverse-Engineering Analyst".
+First, RESEARCH the brand "{brand_name}" ({website}) using your search tool.
+Find out:
+1. What is their core value prop?
+2. Who are their top 3 competitors?
+3. Where are they mentioned online (Reddit, G2, ProductHunt)?
+
+Once you have researching, output a JSON list of 5 "User Personas" who would be the perfect match for this brand.
+
+
+8. Risks & Mitigation
+
+Risk: Latency. Browsing adds 2-3 seconds per call.
+
+Mitigation: Only use "Browsing" for Step 1 (Discovery) to find the personas. For Step 2 (Validation), use standard GPT-4o-mini (fast) but inject the retrieved context into the system prompt so it "knows" the brand without needing to search again.

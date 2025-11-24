@@ -8,7 +8,6 @@ from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 from google import genai
-import spoon_adapter as spoon
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
@@ -197,9 +196,6 @@ async def create_job(req: CreateJobRequest, bg: BackgroundTasks):
     }
     async def run():
         try:
-            if spoon.spoon_enabled():
-                JOBS[job_id]["logs"].append("> SpoonOS orchestrator enabled (SDK: " + spoon.spoon_version() + ")")
-            
             await phase_backprop(brand, JOBS[job_id]["website_url"], JOBS[job_id])
             
             trials = int(os.environ.get("TRIALS_PER_CANDIDATE", "5"))
