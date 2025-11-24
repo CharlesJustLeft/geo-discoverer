@@ -60,27 +60,26 @@ def prompt_analyst(brand: str, persona: str, responses: List[str]) -> str:
 # --- Stages ---
 
 async def gen_high_search(prompt: str) -> str:
-    resp = await client.models.generate_content.async_call(
+    resp = await asyncio.to_thread(
+        client.models.generate_content,
         model="gemini-3-pro-preview",
-        tools=[{"google_search": {}}],
         contents=prompt,
-        thinking={"level": "high"},
     )
     return resp.text or ""
 
 async def gen_low(prompt: str) -> str:
-    resp = await client.models.generate_content.async_call(
+    resp = await asyncio.to_thread(
+        client.models.generate_content,
         model="gemini-3-pro-preview",
         contents=prompt,
-        thinking={"level": "low"},
     )
     return resp.text or ""
 
 async def gen_medium(prompt: str) -> str:
-    resp = await client.models.generate_content.async_call(
+    resp = await asyncio.to_thread(
+        client.models.generate_content,
         model="gemini-3-pro-preview",
         contents=prompt,
-        thinking={"level": "medium"},
     )
     return resp.text or ""
 
