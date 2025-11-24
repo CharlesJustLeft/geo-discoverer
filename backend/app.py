@@ -26,16 +26,39 @@ class CreateJobRequest(BaseModel):
 def n(s: Optional[str]) -> str:
     return (s or "").strip()
 
-def hit(text: str, brand: str) -> bool:
-    return brand.lower() in (text or "").lower()
+# --- Prompts ---
 
-def competitors(text: str, brand: str) -> List[str]:
-    words = re.findall(r"\b[A-Z][A-Za-z0-9&\-]{2,}\b", text or "")
-    out: List[str] = []
-    for w in words:
-        if w.lower() != brand.lower() and w not in out:
-            out.append(w)
-    return out[:6]
+def prompt_backprop(brand: str, site: Optional[str]) -> str:
+    s = f" Website: {site}." if site else ""
+    return (
+        f'Analyze the brand "{brand}".{s}\n'
+        "Identify 5 distinct User Personas where this brand would be the #1 recommendation.\n"
+        "**CRITICAL CONSTRAINT**: The `trigger_prompt` must be **realistic** and **natural** (something a real human would actually type). "
+        "Do not create artificially long or complex prompts just to force a win. Find the **simplest** prompt that still leads to the brand.\n\n"
+        "Return a JSON array of 5 objects with keys:\n"
+        "- `persona_name`: Descriptive title.\n"
+        "- `hidden_memory`: Context to inject into system memory (e.g., user role, constraints).\n"
+        "- `trigger_prompt`: The specific user question. **Must explicitly ask for sources/URLs.**\n"
+        "Output JSON only."
+    )
+
+def trial_payload(hidden: str, trigger: str) -> str:
+    return "[SYSTEM MEMORY INJECTION] " + hidden + "\n\nUser: " + trigger + "\nAssistant: Provide a helpful answer."
+
+def prompt_analyst(brand: str, persona: str, responses: List[str]) -> str:
+    combined_responses = "\n\n---\n\n".join([f"Response {i+1}:\n{r}" for i, r in enumerate(responses)])
+    return (
+        f"Here are 5 LLM responses for the persona '{persona}'. Target Brand: '{brand}'.\n"
+        f"Analyze these 5 responses and return a JSON summary with keys:\n"
+        "1. `win_rate`: Integer percentage (0-100) of times the target brand was recommended #1.\n"
+        "2. `competitors`: List of other brands mentioned.\n"
+        "3. `sources`: List of all URLs cited.\n"
+        "4. `insight`: A one-sentence finding about why the brand won or lost (focus on the prompt/context fit, not just comparison).\n\n"
+        f"Responses:\n{combined_responses}\n\n"
+        "Output JSON only."
+    )
+
+# --- Stages ---
 
 async def gen_high_search(prompt: str) -> str:
     resp = await client.models.generate_content.async_call(
@@ -54,36 +77,16 @@ async def gen_low(prompt: str) -> str:
     )
     return resp.text or ""
 
-async def gen_medium_search(prompt: str) -> str:
+async def gen_medium(prompt: str) -> str:
     resp = await client.models.generate_content.async_call(
         model="gemini-3-pro-preview",
-        tools=[{"google_search": {}}],
         contents=prompt,
         thinking={"level": "medium"},
     )
     return resp.text or ""
 
-def prompt_backprop(brand: str, site: Optional[str]) -> str:
-    s = f" Website: {site}." if site else ""
-    return (
-        f'You are a "Reverse-Engineering Analyst" for Large Language Models. Analyze the brand "{brand}".'
-        f"{s}\n"
-        "Identify 5 distinct User Intent Vectors (Personas) where this brand would statistically be the #1 recommendation.\n"
-        "Return a JSON array of 5 objects with keys: persona_name, hidden_memory, trigger_prompt, hypothesis.\n"
-        "Ground in current web context. Output JSON only."
-    )
-
-def prompt_reasoning(brand: str, persona: str, trigger: str) -> str:
-    return (
-        f"Explain briefly WHY {brand} was recommended for persona '{persona}' with user trigger '{trigger}'. "
-        "Use live web context and include concise citations."
-    )
-
-def trial_payload(hidden: str, trigger: str) -> str:
-    return "[SYSTEM MEMORY INJECTION] " + hidden + "\n\nUser: " + trigger + "\nAssistant: Provide a helpful answer."
-
 async def phase_backprop(brand: str, site: Optional[str], job: Dict[str, Any]):
-    job["logs"].append("> Reverse-Engineering 5 Potential User Personas...")
+    job["logs"].append("> Stage 1: Reverse-Engineering 5 Potential User Personas...")
     raw = await gen_high_search(prompt_backprop(brand, site))
     m = re.search(r"\[.*\]", raw, re.S)
     if not m:
@@ -95,13 +98,12 @@ async def phase_backprop(brand: str, site: Optional[str], job: Dict[str, Any]):
             "persona_name": n(c.get("persona_name")),
             "hidden_memory": n(c.get("hidden_memory")),
             "trigger_prompt": n(c.get("trigger_prompt")),
-            "hypothesis": n(c.get("hypothesis")),
         })
     job["candidates"] = cands
-    job["logs"].append("> Personas generated.")
+    job["logs"].append(f"> Discovery Complete. Found {len(cands)} candidate personas.")
 
 async def phase_trials(brand: str, job: Dict[str, Any], trials: int, concurrency: int):
-    job["logs"].append("> Generating Ghost Payloads (Memory Injection)...")
+    job["logs"].append("> Stage 2: Running 25 Parallel Simulations...")
     sem = asyncio.Semaphore(concurrency)
 
     async def one(cidx: int, tidx: int, hidden: str, trigger: str) -> Dict[str, Any]:
@@ -110,56 +112,72 @@ async def phase_trials(brand: str, job: Dict[str, Any], trials: int, concurrency
             return {
                 "cand_idx": cidx,
                 "trial_idx": tidx,
-                "hit": hit(text, brand),
-                "intro_text": text[:500],
-                "competitors": competitors(text, brand),
+                "llm_result_text": text,
             }
 
     tasks = []
     for i, c in enumerate(job["candidates"]):
         for t in range(trials):
             tasks.append(one(i, t, c["hidden_memory"], c["trigger_prompt"]))
-    job["logs"].append(f"> Executing {len(tasks)} Parallel Simulations...")
+    
     job["trial_results"] = await asyncio.gather(*tasks)
-    job["logs"].append("> Trials completed.")
+    job["logs"].append("> Simulations Completed.")
 
 async def phase_aggregate(brand: str, job: Dict[str, Any]):
-    job["logs"].append("> Analyzing Attribution & Competitor Co-occurrence...")
-    buckets: Dict[int, List[Dict[str, Any]]] = {}
+    job["logs"].append("> Stage 3: Analyzing Results with LLM Analyst...")
+    buckets: Dict[int, List[str]] = {}
     for r in job["trial_results"]:
-        buckets.setdefault(r["cand_idx"], []).append(r)
+        buckets.setdefault(r["cand_idx"], []).append(r["llm_result_text"])
+    
     paths: List[Dict[str, Any]] = []
-    for idx, trials in buckets.items():
+    
+    # Analyze each group sequentially (or parallel if needed, but sequential is safer for rate limits)
+    for idx, responses in buckets.items():
         cand = job["candidates"][idx]
-        freq = sum(1 for r in trials if r["hit"]) 
-        comps: List[str] = []
-        for r in trials:
-            for w in r["competitors"]:
-                if w not in comps and w.lower() != brand.lower():
-                    comps.append(w)
-        why = await gen_medium_search(prompt_reasoning(brand, cand["persona_name"], cand["trigger_prompt"]))
+        job["logs"].append(f"> Analyzing Group {idx+1}: {cand['persona_name']}...")
+        
+        try:
+            analysis_raw = await gen_medium(prompt_analyst(brand, cand["persona_name"], responses))
+            m = re.search(r"\{.*\}", analysis_raw, re.S)
+            if m:
+                analysis = json.loads(m.group(0))
+            else:
+                analysis = {"win_rate": 0, "competitors": [], "sources": [], "insight": "Analysis failed"}
+        except Exception as e:
+             analysis = {"win_rate": 0, "competitors": [], "sources": [], "insight": f"Error: {str(e)}"}
+
         paths.append({
             "persona_name": cand["persona_name"],
             "trigger_prompt": cand["trigger_prompt"],
-            "frequency_count": freq,
-            "frequency_total": len(trials),
-            "attribution": why[:600],
-            "competitors": comps[:6],
+            "frequency_count": int(analysis.get("win_rate", 0) / 20), # Approx count from rate
+            "frequency_total": 5,
+            "win_rate": analysis.get("win_rate", 0),
+            "attribution": analysis.get("insight", ""),
+            "competitors": analysis.get("competitors", [])[:6],
+            "sources": analysis.get("sources", []),
             "debug": {
                 "hidden_memory": cand["hidden_memory"],
                 "trigger_prompt": cand["trigger_prompt"],
             },
         })
-    paths.sort(key=lambda p: p["frequency_count"], reverse=True)
+
+    paths.sort(key=lambda p: p["win_rate"], reverse=True)
     job["paths"] = paths
-    job["top_persona"] = paths[0]["persona_name"] if paths else ""
-    rate = 0
+    
     if paths:
-        rate = round(100 * paths[0]["frequency_count"] / paths[0]["frequency_total"]) 
-    job["highest_win_rate"] = f"{rate}%"
-    job["top_competitor"] = (paths[0]["competitors"][0] if paths and paths[0]["competitors"] else "")
-    job["logs"].append("> Report ready.")
+        top = paths[0]
+        job["top_persona"] = top["persona_name"]
+        job["highest_win_rate"] = f"{top['win_rate']}%"
+        job["top_competitor"] = (top["competitors"][0] if top["competitors"] else "")
+    else:
+        job["top_persona"] = "None"
+        job["highest_win_rate"] = "0%"
+        job["top_competitor"] = ""
+
+    job["logs"].append("> Report Ready.")
     job["status"] = "completed"
+
+# --- API ---
 
 @app.post("/discover/jobs")
 async def create_job(req: CreateJobRequest, bg: BackgroundTasks):
@@ -180,15 +198,22 @@ async def create_job(req: CreateJobRequest, bg: BackgroundTasks):
     async def run():
         try:
             if spoon.spoon_enabled():
-                JOBS[job_id]["logs"].append("> SpoonOS orchestrator enabled")
+                JOBS[job_id]["logs"].append("> SpoonOS orchestrator enabled (SDK: " + spoon.spoon_version() + ")")
+            
             await phase_backprop(brand, JOBS[job_id]["website_url"], JOBS[job_id])
+            
             trials = int(os.environ.get("TRIALS_PER_CANDIDATE", "5"))
             concurrency = int(os.environ.get("CONCURRENCY", "25"))
             await phase_trials(brand, JOBS[job_id], trials, concurrency)
+            
             await phase_aggregate(brand, JOBS[job_id])
+            
         except Exception as e:
             JOBS[job_id]["status"] = "failed"
             JOBS[job_id]["logs"].append(f"! Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            
     bg.add_task(run)
     return {"job_id": job_id}
 
