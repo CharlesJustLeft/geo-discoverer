@@ -126,14 +126,12 @@ async def phase_aggregate(brand: str, job: Dict[str, Any]):
     buckets: Dict[int, List[str]] = {}
     for r in job["trial_results"]:
         buckets.setdefault(r["cand_idx"], []).append(r["llm_result_text"])
-    
-    paths: List[Dict[str, Any]] = []
-    
-    # Analyze each group sequentially (or parallel if needed, but sequential is safer for rate limits)
-    for idx, responses in buckets.items():
+
+    # Analyze all groups in parallel for faster processing
+    async def analyze_one(idx: int, responses: List[str]) -> Dict[str, Any]:
         cand = job["candidates"][idx]
         job["logs"].append(f"> Analyzing Group {idx+1}: {cand['persona_name']}...")
-        
+
         try:
             analysis_raw = await gen_medium(prompt_analyst(brand, cand["persona_name"], responses))
             m = re.search(r"\{.*\}", analysis_raw, re.S)
@@ -144,10 +142,10 @@ async def phase_aggregate(brand: str, job: Dict[str, Any]):
         except Exception as e:
              analysis = {"win_rate": 0, "competitors": [], "sources": [], "insight": f"Error: {str(e)}"}
 
-        paths.append({
+        return {
             "persona_name": cand["persona_name"],
             "trigger_prompt": cand["trigger_prompt"],
-            "frequency_count": int(analysis.get("win_rate", 0) / 20), # Approx count from rate
+            "frequency_count": int(analysis.get("win_rate", 0) / 20),
             "frequency_total": 5,
             "win_rate": analysis.get("win_rate", 0),
             "attribution": analysis.get("insight", ""),
@@ -157,11 +155,14 @@ async def phase_aggregate(brand: str, job: Dict[str, Any]):
                 "hidden_memory": cand["hidden_memory"],
                 "trigger_prompt": cand["trigger_prompt"],
             },
-        })
+        }
 
-    paths.sort(key=lambda p: p["win_rate"], reverse=True)
+    tasks = [analyze_one(idx, responses) for idx, responses in buckets.items()]
+    paths = await asyncio.gather(*tasks)
+
+    paths = sorted(paths, key=lambda p: p["win_rate"], reverse=True)
     job["paths"] = paths
-    
+
     if paths:
         top = paths[0]
         job["top_persona"] = top["persona_name"]

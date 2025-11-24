@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GEO Discoverer | AI Brand Visibility</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -325,6 +326,10 @@
         </div>
       </div>
       <p class="text-gray-500 text-sm mt-6 animate-pulse">Injecting System Prompts & Context Vectors...</p>
+      <div class="mt-8 p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
+        <p class="text-blue-300 text-sm font-medium mb-2">⏱️ Analysis takes approximately 3 minutes</p>
+        <p class="text-gray-400 text-xs">Feel free to bookmark this page and come back later. Your results will be ready when the analysis completes.</p>
+      </div>
     </div>
   </div>
   <div id="view-dashboard" class="hidden flex-grow p-6 md:p-12 max-w-7xl mx-auto w-full fade-in z-10 relative h-full">
@@ -392,14 +397,94 @@
     function switchView(v) { Object.values(views).forEach(el => el.classList.add('hidden')); views[v].classList.remove('hidden'); if (v === 'dashboard') { document.body.classList.remove('overflow-hidden') } }
     function setProgress(p) { document.getElementById('progressBar').style.width = p + '%' }
     function addLog(t) { const c = document.getElementById('log-container'); const d = document.createElement('div'); d.className = 'flex items-center gap-3 fade-in'; d.innerHTML = '<span class="text-blue-500 font-bold">></span> <span class="text-gray-300">' + t + '</span>'; c.appendChild(d); c.scrollTop = c.scrollHeight }
-    async function createJob(brand, site) { const r = await fetch('/api/discover', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brand_name: brand, website_url: site }) }); if (!r.ok) throw new Error('job create failed'); return r.json() }
-    function streamLogs(job_id) { return new Promise((resolve) => { const es = new EventSource('/api/discover/stream?job_id=' + job_id); let i = 0; es.onmessage = (e) => { const m = e.data || ''; if (m.startsWith('> COMPLETED')) { es.close(); resolve(true) } else if (m.startsWith('> FAILED')) { es.close(); resolve(false) } else { addLog(m); i++; setProgress(Math.min(100, 20 + i * 5)) } } }) }
+    async function createJob(brand, site) { const r = await fetch('/api/discover', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brand_name: brand, website_url: site }) }); if (!r.ok) { let errorMsg = 'job create failed'; try { const errorData = await r.json(); errorMsg = errorData.error || errorMsg; } catch (e) { errorMsg = `${errorMsg} (${r.status} ${r.statusText})`; } throw new Error(errorMsg); } return r.json() }
+    function streamLogs(job_id) { return new Promise((resolve) => { const es = new EventSource('/api/discover/stream?job_id=' + job_id); let i = 0; es.onopen = () => { console.log('Stream connected'); addLog('Connected to backend...'); }; es.onerror = (err) => { console.error('Stream error:', err); addLog('Stream connection error'); es.close(); resolve(false); }; es.onmessage = (e) => { const m = e.data || ''; console.log('Stream message:', m); if (m.startsWith('> COMPLETED')) { es.close(); resolve(true) } else if (m.startsWith('> FAILED')) { es.close(); resolve(false) } else { addLog(m); i++; setProgress(Math.min(100, 20 + i * 5)) } } }) }
     async function fetchResult(job_id) { const r = await fetch('/api/discover/result?job_id=' + job_id); if (!r.ok) throw new Error('result fetch failed'); return r.json() }
     function renderResults(res) { document.getElementById('dashBrandName').innerText = res.brand_name; document.getElementById('dynamic-winning-persona').innerText = res.top_persona || ''; document.getElementById('dynamic-discovery-rate').innerText = res.highest_win_rate || ''; document.getElementById('dynamic-competitor').innerText = res.top_competitor || ''; const tbody = document.getElementById('results-table-body'); tbody.innerHTML = ''; (res.paths || []).forEach(p => { const tr = document.createElement('tr'); tr.className = 'group cursor-pointer transition-colors'; const barPct = Math.round(100 * p.frequency_count / p.frequency_total); tr.innerHTML = `<td class="p-5 pl-6 font-medium text-white"><div class="flex items-center gap-3"><span class="w-2 h-2 rounded-full bg-green-500"></span>${p.persona_name}</div></td><td class="p-5 font-mono text-xs text-blue-300">${p.trigger_prompt}</td><td class="p-5"><div class="flex items-center gap-2"><div class="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden"><div class="h-full bg-green-500" style="width:${barPct}%"></div></div><span class="text-xs font-bold text-green-500">${p.frequency_count}/${p.frequency_total}</span></div></td><td class="p-5 text-xs">${p.attribution}</td><td class="p-5 text-xs">${(p.competitors || []).join(', ')}</td>`; tbody.appendChild(tr) }); const dbg = document.getElementById('debugger'); dbg.innerHTML = ''; (res.debug || []).forEach((d, i) => { const details = document.createElement('details'); details.className = 'mb-4 group'; details.open = i === 0; details.innerHTML = `<summary class="p-4 bg-[#161B22] rounded-lg flex items-center justify-between border border-gray-800 hover:border-gray-600 transition-all"><div class="flex items-center gap-3"><span class="text-green-500 font-bold">✅ Analysis</span></div><div class="text-green-400 text-xs font-mono font-bold border border-green-900 bg-green-900/20 px-2 py-1 rounded">VISIBILITY</div></summary><div class="p-6 bg-[#0D1117] border-x border-b border-gray-800 rounded-b-lg"><div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div><div class="text-xs text-gray-500 font-bold uppercase mb-2 tracking-wider">System Injection (Memory)</div><div class="code-window p-4 text-green-300 leading-relaxed"><div class="code-header mb-3 -mx-4 -mt-4"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div></div>${d.hidden_memory.replace(/\n/g, '<br>')}</div></div><div><div class="text-xs text-gray-500 font-bold uppercase mb-2 tracking-wider">User Trigger</div><div class="code-window p-4 text-blue-300 leading-relaxed"><div class="code-header mb-3 -mx-4 -mt-4"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div></div>${d.trigger_prompt}</div></div></div></div>`; dbg.appendChild(details) }) }
-    async function startSimulation(e) { e.preventDefault(); const brand = document.getElementById('companyName').value; const site = document.getElementById('websiteUrl').value; document.getElementById('loadingBrandName').innerText = brand; document.getElementById('dashBrandName').innerText = brand; switchView('loading'); try { const { job_id } = await createJob(brand, site); const ok = await streamLogs(job_id); if (!ok) { addLog('Simulation failed'); return } const res = await fetchResult(job_id); switchView('dashboard'); renderResults(res) } catch (err) { addLog('Error: ' + String(err)) } }
+    async function startSimulation(e) { e.preventDefault(); const brand = document.getElementById('companyName').value; const site = document.getElementById('websiteUrl').value; document.getElementById('loadingBrandName').innerText = brand; document.getElementById('dashBrandName').innerText = brand; switchView('loading'); try { const { job_id } = await createJob(brand, site); const ok = await streamLogs(job_id); if (!ok) { addLog('Simulation failed'); return } const res = await fetchResult(job_id); currentResults = res; switchView('dashboard'); renderResults(res) } catch (err) { addLog('Error: ' + String(err)) } }
+    let currentResults = null;
+    function downloadPDF() {
+      if (!currentResults) { alert('No results available to download'); return; }
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 20;
+      let y = 20;
+
+      // Title
+      doc.setFontSize(20);
+      doc.setFont(undefined, 'bold');
+      doc.text('GEO Discoverer Report', margin, y);
+      y += 10;
+
+      // Brand name
+      doc.setFontSize(16);
+      doc.text(`Brand: ${currentResults.brand_name}`, margin, y);
+      y += 15;
+
+      // Key metrics
+      doc.setFontSize(12);
+      doc.setFont(undefined, 'bold');
+      doc.text('Key Metrics', margin, y);
+      y += 8;
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(10);
+      doc.text(`Winning Persona: ${currentResults.top_persona || 'N/A'}`, margin + 5, y);
+      y += 6;
+      doc.text(`Highest Win Rate: ${currentResults.highest_win_rate || 'N/A'}`, margin + 5, y);
+      y += 6;
+      doc.text(`Top Competitor: ${currentResults.top_competitor || 'N/A'}`, margin + 5, y);
+      y += 12;
+
+      // Discovery paths
+      doc.setFontSize(12);
+      doc.setFont(undefined, 'bold');
+      doc.text('Discovery Paths', margin, y);
+      y += 8;
+
+      (currentResults.paths || []).forEach((path, idx) => {
+        if (y > 250) { doc.addPage(); y = 20; }
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.text(`${idx + 1}. ${path.persona_name}`, margin + 5, y);
+        y += 6;
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(9);
+        const triggerLines = doc.splitTextToSize(`Trigger: ${path.trigger_prompt}`, pageWidth - margin * 2 - 10);
+        doc.text(triggerLines, margin + 10, y);
+        y += triggerLines.length * 5;
+        doc.text(`Frequency: ${path.frequency_count}/${path.frequency_total}`, margin + 10, y);
+        y += 5;
+        const attrLines = doc.splitTextToSize(`Insight: ${path.attribution}`, pageWidth - margin * 2 - 10);
+        doc.text(attrLines, margin + 10, y);
+        y += attrLines.length * 5;
+        if (path.competitors && path.competitors.length > 0) {
+          doc.text(`Competitors: ${path.competitors.join(', ')}`, margin + 10, y);
+          y += 5;
+        }
+        y += 5;
+      });
+
+      // Footer
+      const timestamp = new Date().toISOString().split('T')[0];
+      doc.setFontSize(8);
+      doc.setTextColor(128);
+      doc.text(`Generated by GEO Discoverer on ${timestamp}`, margin, doc.internal.pageSize.getHeight() - 10);
+
+      doc.save(`GEO_Discoverer_${currentResults.brand_name.replace(/\s+/g, '_')}_${timestamp}.pdf`);
+    }
+
     document.getElementById('discoveryForm').addEventListener('submit', startSimulation);
-    document.getElementById('newBtn').addEventListener('click', () => { document.getElementById('log-container').innerHTML = ''; setProgress(0); document.getElementById('discoveryForm').reset(); switchView('home') });
-    document.getElementById('downloadBtn').addEventListener('click', () => { alert('Downloading report...') });
+    document.getElementById('newBtn').addEventListener('click', () => {
+      if (confirm('⚠️ Warning: You will not be able to return to this page after starting a new analysis.\n\nAre you sure you want to continue?')) {
+        currentResults = null;
+        document.getElementById('log-container').innerHTML = '';
+        setProgress(0);
+        document.getElementById('discoveryForm').reset();
+        switchView('home');
+      }
+    });
+    document.getElementById('downloadBtn').addEventListener('click', downloadPDF);
     document.getElementById('brand-reset').addEventListener('click', () => { document.getElementById('discoveryForm').reset(); switchView('home') });
   </script>
 </body>
