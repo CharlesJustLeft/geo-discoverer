@@ -326,12 +326,35 @@
         </div>
       </div>
       <p class="text-gray-500 text-sm mt-6 animate-pulse">Injecting System Prompts & Context Vectors...</p>
-      <div class="mt-8 p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
-        <p class="text-blue-300 text-sm font-medium mb-2">⏱️ Analysis takes approximately 3 minutes</p>
-        <p class="text-gray-400 text-xs">Feel free to bookmark this page and come back later. Your results will be ready when the analysis completes.</p>
+      <div
+        class="mt-10 flex items-start gap-4 p-5 rounded-xl border border-dashed border-gray-800 bg-gray-900/30 text-left max-w-lg mx-auto">
+        <div class="text-2xl mt-1">⏱️</div>
+        <div>
+          <h4 class="text-blue-400 font-bold font-heading text-sm mb-1 tracking-wide">ESTIMATED TIME: ~3 MINUTES</h4>
+          <p class="text-gray-500 text-xs leading-relaxed">You can bookmark this page and return later. The agents will
+            continue working in the background.</p>
+        </div>
       </div>
     </div>
   </div>
+
+  <!-- Custom Modal -->
+  <div id="custom-modal"
+    class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center transition-opacity duration-200 opacity-0">
+    <div
+      class="bg-[#161B22] border border-gray-800 rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl transform scale-95 transition-transform duration-200"
+      id="modal-content">
+      <h3 class="text-xl font-bold font-heading text-white mb-2">Start New Analysis?</h3>
+      <p class="text-gray-400 text-sm mb-8 leading-relaxed">
+        Warning: You will not be able to return to this report after starting a new analysis.
+      </p>
+      <div class="flex gap-3 justify-end">
+        <button id="modal-cancel" class="secondary-button px-6 py-2 text-sm">Cancel</button>
+        <button id="modal-confirm" class="vibrant-button px-6 py-2 text-sm">Continue</button>
+      </div>
+    </div>
+  </div>
+
   <div id="view-dashboard" class="hidden flex-grow p-6 md:p-12 max-w-7xl mx-auto w-full fade-in z-10 relative h-full">
     <div
       class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 border-b border-gray-800 pb-8">
@@ -356,9 +379,9 @@
       </div>
       <div class="metric-card rounded-xl p-6 relative overflow-hidden group">
         <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity text-6xl">📈</div>
-        <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Discovery Rate</div>
-        <div id="dynamic-discovery-rate" class="text-2xl font-bold text-white font-heading"></div>
-        <div class="text-xs text-blue-400 mt-3 font-mono bg-blue-400/10 inline-block px-2 py-1 rounded">STABLE CONTEXT
+        <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Discovery Score</div>
+        <div id="dynamic-discovery-score" class="text-2xl font-bold text-white font-heading"></div>
+        <div id="score-level-badge" class="text-xs text-blue-400 mt-3 font-mono bg-blue-400/10 inline-block px-2 py-1 rounded">CALCULATING...
         </div>
       </div>
       <div class="metric-card rounded-xl p-6 relative overflow-hidden group">
@@ -381,6 +404,7 @@
               <th class="p-5">Frequency</th>
               <th class="p-5">Attribution</th>
               <th class="p-5">Competitors</th>
+              <th class="p-5">Sources</th>
             </tr>
           </thead>
           <tbody class="text-sm text-gray-300" id="results-table-body"></tbody>
@@ -400,7 +424,7 @@
     async function createJob(brand, site) { const r = await fetch('/api/discover', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brand_name: brand, website_url: site }) }); if (!r.ok) { let errorMsg = 'job create failed'; try { const errorData = await r.json(); errorMsg = errorData.error || errorMsg; } catch (e) { errorMsg = `${errorMsg} (${r.status} ${r.statusText})`; } throw new Error(errorMsg); } return r.json() }
     function streamLogs(job_id) { return new Promise((resolve) => { const es = new EventSource('/api/discover/stream?job_id=' + job_id); let i = 0; es.onopen = () => { console.log('Stream connected'); addLog('Connected to backend...'); }; es.onerror = (err) => { console.error('Stream error:', err); addLog('Stream connection error'); es.close(); resolve(false); }; es.onmessage = (e) => { const m = e.data || ''; console.log('Stream message:', m); if (m.startsWith('> COMPLETED')) { es.close(); resolve(true) } else if (m.startsWith('> FAILED')) { es.close(); resolve(false) } else { addLog(m); i++; setProgress(Math.min(100, 20 + i * 5)) } } }) }
     async function fetchResult(job_id) { const r = await fetch('/api/discover/result?job_id=' + job_id); if (!r.ok) throw new Error('result fetch failed'); return r.json() }
-    function renderResults(res) { document.getElementById('dashBrandName').innerText = res.brand_name; document.getElementById('dynamic-winning-persona').innerText = res.top_persona || ''; document.getElementById('dynamic-discovery-rate').innerText = res.highest_win_rate || ''; document.getElementById('dynamic-competitor').innerText = res.top_competitor || ''; const tbody = document.getElementById('results-table-body'); tbody.innerHTML = ''; (res.paths || []).forEach(p => { const tr = document.createElement('tr'); tr.className = 'group cursor-pointer transition-colors'; const barPct = Math.round(100 * p.frequency_count / p.frequency_total); tr.innerHTML = `<td class="p-5 pl-6 font-medium text-white"><div class="flex items-center gap-3"><span class="w-2 h-2 rounded-full bg-green-500"></span>${p.persona_name}</div></td><td class="p-5 font-mono text-xs text-blue-300">${p.trigger_prompt}</td><td class="p-5"><div class="flex items-center gap-2"><div class="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden"><div class="h-full bg-green-500" style="width:${barPct}%"></div></div><span class="text-xs font-bold text-green-500">${p.frequency_count}/${p.frequency_total}</span></div></td><td class="p-5 text-xs">${p.attribution}</td><td class="p-5 text-xs">${(p.competitors || []).join(', ')}</td>`; tbody.appendChild(tr) }); const dbg = document.getElementById('debugger'); dbg.innerHTML = ''; (res.debug || []).forEach((d, i) => { const details = document.createElement('details'); details.className = 'mb-4 group'; details.open = i === 0; details.innerHTML = `<summary class="p-4 bg-[#161B22] rounded-lg flex items-center justify-between border border-gray-800 hover:border-gray-600 transition-all"><div class="flex items-center gap-3"><span class="text-green-500 font-bold">✅ Analysis</span></div><div class="text-green-400 text-xs font-mono font-bold border border-green-900 bg-green-900/20 px-2 py-1 rounded">VISIBILITY</div></summary><div class="p-6 bg-[#0D1117] border-x border-b border-gray-800 rounded-b-lg"><div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div><div class="text-xs text-gray-500 font-bold uppercase mb-2 tracking-wider">System Injection (Memory)</div><div class="code-window p-4 text-green-300 leading-relaxed"><div class="code-header mb-3 -mx-4 -mt-4"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div></div>${d.hidden_memory.replace(/\n/g, '<br>')}</div></div><div><div class="text-xs text-gray-500 font-bold uppercase mb-2 tracking-wider">User Trigger</div><div class="code-window p-4 text-blue-300 leading-relaxed"><div class="code-header mb-3 -mx-4 -mt-4"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div></div>${d.trigger_prompt}</div></div></div></div>`; dbg.appendChild(details) }) }
+    function renderResults(res) { document.getElementById('dashBrandName').innerText = res.brand_name; document.getElementById('dynamic-winning-persona').innerText = res.top_persona || ''; document.getElementById('dynamic-discovery-score').innerText = (res.discovery_score || 0) + '/100'; const badge = document.getElementById('score-level-badge'); const level = res.score_level || 'LOW'; if (level === 'HIGH') { badge.className = 'text-xs text-green-400 mt-3 font-mono bg-green-400/10 inline-block px-2 py-1 rounded'; badge.innerText = 'HIGH VISIBILITY'; } else if (level === 'MEDIUM') { badge.className = 'text-xs text-blue-400 mt-3 font-mono bg-blue-400/10 inline-block px-2 py-1 rounded'; badge.innerText = 'MODERATE'; } else { badge.className = 'text-xs text-red-400 mt-3 font-mono bg-red-400/10 inline-block px-2 py-1 rounded'; badge.innerText = 'LOW VISIBILITY'; } document.getElementById('dynamic-competitor').innerText = res.top_competitor || ''; const tbody = document.getElementById('results-table-body'); tbody.innerHTML = ''; (res.paths || []).forEach(p => { const tr = document.createElement('tr'); tr.className = 'group cursor-pointer transition-colors'; const barPct = Math.round(100 * p.frequency_count / p.frequency_total); const sourcesHtml = (p.sources || []).map(s => `<a href="${s}" target="_blank" class="text-blue-400 hover:text-blue-300 underline block truncate max-w-[150px]">${new URL(s).hostname}</a>`).join(''); tr.innerHTML = `<td class="p-5 pl-6 font-medium text-white"><div class="flex items-center gap-3"><span class="w-2 h-2 rounded-full bg-green-500"></span>${p.persona_name}</div></td><td class="p-5 font-mono text-xs text-blue-300">${p.trigger_prompt}</td><td class="p-5"><div class="flex items-center gap-2"><div class="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden"><div class="h-full bg-green-500" style="width:${barPct}%"></div></div><span class="text-xs font-bold text-green-500">${p.frequency_count}/${p.frequency_total}</span></div></td><td class="p-5 text-xs">${p.attribution}</td><td class="p-5 text-xs">${(p.competitors || []).join(', ')}</td><td class="p-5 text-xs">${sourcesHtml}</td>`; tbody.appendChild(tr) }); const dbg = document.getElementById('debugger'); dbg.innerHTML = ''; (res.debug || []).forEach((d, i) => { const details = document.createElement('details'); details.className = 'mb-4 group'; details.open = i === 0; details.innerHTML = `<summary class="p-4 bg-[#161B22] rounded-lg flex items-center justify-between border border-gray-800 hover:border-gray-600 transition-all"><div class="flex items-center gap-3"><span class="text-green-500 font-bold">✅ Analysis</span></div><div class="text-green-400 text-xs font-mono font-bold border border-green-900 bg-green-900/20 px-2 py-1 rounded">VISIBILITY</div></summary><div class="p-6 bg-[#0D1117] border-x border-b border-gray-800 rounded-b-lg"><div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div><div class="text-xs text-gray-500 font-bold uppercase mb-2 tracking-wider">System Injection (Memory)</div><div class="code-window p-4 text-green-300 leading-relaxed"><div class="code-header mb-3 -mx-4 -mt-4"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div></div>${d.hidden_memory.replace(/\n/g, '<br>')}</div></div><div><div class="text-xs text-gray-500 font-bold uppercase mb-2 tracking-wider">User Trigger</div><div class="code-window p-4 text-blue-300 leading-relaxed"><div class="code-header mb-3 -mx-4 -mt-4"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div></div>${d.trigger_prompt}</div></div></div></div>`; dbg.appendChild(details) }) }
     async function startSimulation(e) { e.preventDefault(); const brand = document.getElementById('companyName').value; const site = document.getElementById('websiteUrl').value; document.getElementById('loadingBrandName').innerText = brand; document.getElementById('dashBrandName').innerText = brand; switchView('loading'); try { const { job_id } = await createJob(brand, site); const ok = await streamLogs(job_id); if (!ok) { addLog('Simulation failed'); return } const res = await fetchResult(job_id); currentResults = res; switchView('dashboard'); renderResults(res) } catch (err) { addLog('Error: ' + String(err)) } }
     let currentResults = null;
     function downloadPDF() {
@@ -474,16 +498,39 @@
       doc.save(`GEO_Discoverer_${currentResults.brand_name.replace(/\s+/g, '_')}_${timestamp}.pdf`);
     }
 
+    // Modal Logic
+    const modal = document.getElementById('custom-modal');
+    const modalContent = document.getElementById('modal-content');
+    const openModal = () => {
+      modal.classList.remove('hidden');
+      setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        modalContent.classList.remove('scale-95');
+        modalContent.classList.add('scale-100');
+      }, 10);
+    };
+    const closeModal = () => {
+      modal.classList.add('opacity-0');
+      modalContent.classList.remove('scale-100');
+      modalContent.classList.add('scale-95');
+      setTimeout(() => {
+        modal.classList.add('hidden');
+      }, 200);
+    };
+
     document.getElementById('discoveryForm').addEventListener('submit', startSimulation);
-    document.getElementById('newBtn').addEventListener('click', () => {
-      if (confirm('⚠️ Warning: You will not be able to return to this page after starting a new analysis.\n\nAre you sure you want to continue?')) {
-        currentResults = null;
-        document.getElementById('log-container').innerHTML = '';
-        setProgress(0);
-        document.getElementById('discoveryForm').reset();
-        switchView('home');
-      }
+    document.getElementById('newBtn').addEventListener('click', openModal);
+
+    document.getElementById('modal-cancel').addEventListener('click', closeModal);
+    document.getElementById('modal-confirm').addEventListener('click', () => {
+      closeModal();
+      currentResults = null;
+      document.getElementById('log-container').innerHTML = '';
+      setProgress(0);
+      document.getElementById('discoveryForm').reset();
+      switchView('home');
     });
+
     document.getElementById('downloadBtn').addEventListener('click', downloadPDF);
     document.getElementById('brand-reset').addEventListener('click', () => { document.getElementById('discoveryForm').reset(); switchView('home') });
   </script>

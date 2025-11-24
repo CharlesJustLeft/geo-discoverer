@@ -47,7 +47,7 @@ def prompt_backprop(brand: str, site: Optional[str]) -> str:
     )
 
 def trial_payload(hidden: str, trigger: str) -> str:
-    return "[SYSTEM MEMORY INJECTION] " + hidden + "\n\nUser: " + trigger + "\nAssistant: Provide a helpful answer."
+    return "[SYSTEM MEMORY INJECTION] " + hidden + "\n\nUser: " + trigger + "\nAssistant: Provide a helpful answer with specific sources/URLs."
 
 def prompt_analyst(brand: str, persona: str, responses: List[str]) -> str:
     combined_responses = "\n\n---\n\n".join([f"Response {i+1}:\n{r}" for i, r in enumerate(responses)])
@@ -90,6 +90,46 @@ async def gen_medium(prompt: str) -> str:
         config=search_config,
     )
     return resp.text or ""
+
+def calculate_discovery_score(paths: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Calculate composite discovery score based on prompt complexity and win rates."""
+    total_score = 0.0
+    persona_weight = 0.2  # Equal weight for 5 personas
+
+    for path in paths:
+        # Factor 1: Prompt complexity score
+        trigger = path.get("trigger_prompt", "")
+        word_count = len(trigger.split())
+
+        if word_count <= 5:
+            prompt_complexity = 1.0  # Simple, natural queries
+        elif word_count <= 10:
+            prompt_complexity = 0.6  # Medium complexity
+        else:
+            prompt_complexity = 0.3  # Complex, less likely queries
+
+        # Factor 2: Win rate (normalize to 0-1)
+        win_rate = path.get("win_rate", 0) / 100.0
+
+        # Calculate persona contribution
+        persona_score = persona_weight * prompt_complexity * win_rate
+        total_score += persona_score
+
+    # Scale to 0-100
+    discovery_score = int(total_score * 100)
+
+    # Determine level
+    if discovery_score >= 61:
+        level = "HIGH"
+    elif discovery_score >= 31:
+        level = "MEDIUM"
+    else:
+        level = "LOW"
+
+    return {
+        "score": discovery_score,
+        "level": level
+    }
 
 async def phase_backprop(brand: str, site: Optional[str], job: Dict[str, Any]):
     job["logs"].append("> Stage 1: Reverse-Engineering 5 Potential User Personas...")
@@ -159,6 +199,7 @@ async def phase_aggregate(brand: str, job: Dict[str, Any]):
             "attribution": analysis.get("insight", ""),
             "competitors": analysis.get("competitors", [])[:6],
             "sources": analysis.get("sources", []),
+            "trial_responses": responses,  # Include all trial responses
             "debug": {
                 "hidden_memory": cand["hidden_memory"],
                 "trigger_prompt": cand["trigger_prompt"],
@@ -180,6 +221,12 @@ async def phase_aggregate(brand: str, job: Dict[str, Any]):
         job["top_persona"] = "None"
         job["highest_win_rate"] = "0%"
         job["top_competitor"] = ""
+
+    # Calculate Discovery Score
+    score_data = calculate_discovery_score(paths)
+    job["discovery_score"] = score_data["score"]
+    job["score_level"] = score_data["level"]
+    job["logs"].append(f"> Discovery Score: {score_data['score']}/100 ({score_data['level']})")
 
     job["logs"].append("> Report Ready.")
     job["status"] = "completed"
@@ -251,6 +298,8 @@ async def job_result(job_id: str):
         "top_persona": job["top_persona"],
         "highest_win_rate": job["highest_win_rate"],
         "top_competitor": job["top_competitor"],
+        "discovery_score": job.get("discovery_score", 0),
+        "score_level": job.get("score_level", "LOW"),
         "paths": [{
             "persona_name": p["persona_name"],
             "trigger_prompt": p["trigger_prompt"],
