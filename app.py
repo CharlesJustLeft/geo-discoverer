@@ -307,6 +307,8 @@ async def job_result(job_id: str):
             "frequency_total": p["frequency_total"],
             "attribution": p["attribution"],
             "competitors": p["competitors"],
+            "sources": p.get("sources", []),
+            "trial_responses": p.get("trial_responses", [])
         } for p in job["paths"]],
         "debug": [p["debug"] for p in job["paths"]],
         "status": job["status"],
