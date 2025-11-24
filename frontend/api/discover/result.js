@@ -4,9 +4,9 @@ export default async function handler(req, res) {
     res.status(400).send('job_id required')
     return
   }
-  const base = process.env.SPOONOS_BASE_URL
+  const base = process.env.BACKEND_URL
   if (!base) {
-    res.status(500).json({ error: 'SPOONOS_BASE_URL not set' })
+    res.status(500).json({ error: 'BACKEND_URL not set' })
     return
   }
   const r = await fetch(`${base}/discover/jobs/${job_id}/result`)
