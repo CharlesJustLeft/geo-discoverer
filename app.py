@@ -8,6 +8,7 @@ from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 from google import genai
+from google.genai import types
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
@@ -15,6 +16,10 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 app = FastAPI(title="GEO Discoverer Backend")
+
+# Enable Google Search grounding for real-time web access
+grounding_tool = types.Tool(google_search=types.GoogleSearch())
+search_config = types.GenerateContentConfig(tools=[grounding_tool])
 
 JOBS: Dict[str, Dict[str, Any]] = {}
 
@@ -64,6 +69,7 @@ async def gen_high_search(prompt: str) -> str:
         client.models.generate_content,
         model="gemini-3-pro-preview",
         contents=prompt,
+        config=search_config,
     )
     return resp.text or ""
 
@@ -72,6 +78,7 @@ async def gen_low(prompt: str) -> str:
         client.models.generate_content,
         model="gemini-3-pro-preview",
         contents=prompt,
+        config=search_config,
     )
     return resp.text or ""
 
@@ -80,6 +87,7 @@ async def gen_medium(prompt: str) -> str:
         client.models.generate_content,
         model="gemini-3-pro-preview",
         contents=prompt,
+        config=search_config,
     )
     return resp.text or ""
 
