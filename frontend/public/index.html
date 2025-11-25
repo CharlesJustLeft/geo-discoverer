@@ -525,7 +525,46 @@
     </div>
 
     <!-- NEW: Score Breakdown Section -->
+    <div class="bg-[#1F2937] border border-[#374151] rounded-xl p-6 mb-12">
+      <h3 class="text-2xl font-bold font-heading mb-6">Strategic Analysis</h3>
 
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Left: AI Narrative -->
+        <div class="lg:col-span-1">
+          <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Assessment</h4>
+          <p id="dynamic-score-explanation" class="text-gray-300 leading-relaxed font-light text-sm">
+            <span class="animate-pulse">Waiting for analysis...</span>
+          </p>
+        </div>
+
+        <!-- Right: Visualization & Data -->
+        <div class="lg:col-span-2">
+          <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Score Contribution (Max 20pts each)
+          </h4>
+          <div id="score-chart-container" class="space-y-3 mb-6"></div>
+
+          <details class="group">
+            <summary
+              class="text-xs text-blue-400 cursor-pointer hover:text-blue-300 flex items-center gap-2 select-none">
+              <span>▶ Show Calculation Details</span>
+            </summary>
+            <div class="mt-4 overflow-hidden rounded-lg border border-gray-800">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-gray-800 text-gray-400">
+                  <tr>
+                    <th class="p-2">Persona</th>
+                    <th class="p-2">Win Rate</th>
+                    <th class="p-2">Complexity</th>
+                    <th class="p-2 text-right">Points</th>
+                  </tr>
+                </thead>
+                <tbody id="score-table-body" class="text-gray-300 divide-y divide-gray-800"></tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
     <!-- END NEW SECTION -->
 
     <div class="mb-12">
@@ -611,6 +650,43 @@
         badge.innerText = 'LOW VISIBILITY';
       }
       document.getElementById('dynamic-competitor').innerText = res.top_competitor || '';
+
+      // 1. Render Narrative
+      document.getElementById('dynamic-score-explanation').innerText = res.score_explanation || 'No analysis available.';
+
+      // 2. Render Bar Chart & Table
+      const chartContainer = document.getElementById('score-chart-container');
+      const tableBody = document.getElementById('score-table-body');
+      chartContainer.innerHTML = '';
+      tableBody.innerHTML = '';
+
+      (res.score_breakdown || []).forEach(item => {
+        // Bar Chart
+        const widthPct = (item.points / 20) * 100;
+        let colorClass = 'bg-red-500';
+        if (item.points >= 12) colorClass = 'bg-green-500';
+        else if (item.points >= 6) colorClass = 'bg-yellow-500';
+
+        chartContainer.innerHTML += `
+            <div class="flex items-center gap-3 text-xs">
+              <div class="w-24 truncate text-gray-400" title="${item.persona}">${item.persona}</div>
+              <div class="flex-grow bg-gray-800 h-2 rounded-full overflow-hidden">
+                <div class="${colorClass} h-full transition-all duration-500" style="width: ${widthPct}%"></div>
+              </div>
+              <div class="w-8 text-right font-mono text-white">${item.points}</div>
+            </div>
+          `;
+
+        // Detail Table
+        tableBody.innerHTML += `
+            <tr>
+              <td class="p-2">${item.persona}</td>
+              <td class="p-2 font-mono">${item.win_rate}%</td>
+              <td class="p-2"><span class="bg-gray-800 px-1.5 py-0.5 rounded text-[10px]">${item.complexity_label} (x${item.complexity_multiplier})</span></td>
+              <td class="p-2 text-right font-mono font-bold text-white">${item.points}</td>
+            </tr>
+          `;
+      });
 
       const tbody = document.getElementById('results-table-body');
       tbody.innerHTML = '';
