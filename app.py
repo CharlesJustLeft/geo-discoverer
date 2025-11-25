@@ -23,6 +23,16 @@ search_config = types.GenerateContentConfig(tools=[grounding_tool])
 
 JOBS: Dict[str, Dict[str, Any]] = {}
 
+# --- Job Cancellation Helper ---
+class JobCancelledException(Exception):
+    """Raised when a job has been cancelled."""
+    pass
+
+def check_cancelled(job: Dict[str, Any]):
+    """Raise exception if job was cancelled."""
+    if job.get("cancelled"):
+        raise JobCancelledException("Job cancelled by user")
+
 class CreateJobRequest(BaseModel):
     brand_name: str
     website_url: Optional[str] = None
@@ -158,6 +168,7 @@ def calculate_discovery_score(paths: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 async def phase_backprop(brand: str, site: Optional[str], job: Dict[str, Any]):
+    check_cancelled(job)  # Check before starting
     job["logs"].append("> Stage 1: Reverse-Engineering 5 Potential User Personas...")
     raw = await gen_high_search(prompt_backprop(brand, site))
     m = re.search(r"\[.*\]", raw, re.S)
@@ -175,11 +186,13 @@ async def phase_backprop(brand: str, site: Optional[str], job: Dict[str, Any]):
     job["logs"].append(f"> Discovery Complete. Found {len(cands)} candidate personas.")
 
 async def phase_trials(brand: str, job: Dict[str, Any], trials: int, concurrency: int):
+    check_cancelled(job)  # Check before starting
     job["logs"].append("> Stage 2: Running 25 Parallel Simulations...")
     sem = asyncio.Semaphore(concurrency)
 
     async def one(cidx: int, tidx: int, hidden: str, trigger: str) -> Dict[str, Any]:
         async with sem:
+            check_cancelled(job)  # Check before each API call
             text = await gen_low(trial_payload(hidden, trigger))
             return {
                 "cand_idx": cidx,
@@ -192,10 +205,15 @@ async def phase_trials(brand: str, job: Dict[str, Any], trials: int, concurrency
         for t in range(trials):
             tasks.append(one(i, t, c["hidden_memory"], c["trigger_prompt"]))
     
-    job["trial_results"] = await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    # Filter out cancelled/failed results (exceptions become the result when return_exceptions=True)
+    job["trial_results"] = [r for r in results if isinstance(r, dict)]
+    
+    check_cancelled(job)  # Check after completion
     job["logs"].append("> Simulations Completed.")
 
 async def phase_aggregate(brand: str, job: Dict[str, Any]):
+    check_cancelled(job)  # Check before starting
     job["logs"].append("> Stage 3: Analyzing Results with LLM Analyst...")
     job["status"] = "analyzing"  # Intermediate status for progressive loading
     
@@ -225,6 +243,7 @@ async def phase_aggregate(brand: str, job: Dict[str, Any]):
 
     # Analyze each persona and update paths progressively
     async def analyze_one(idx: int, responses: List[str]):
+        check_cancelled(job)  # Check before each analysis
         cand = job["candidates"][idx]
         job["logs"].append(f"> Analyzing Persona {idx+1}: {cand['persona_name']}...")
 
@@ -235,6 +254,8 @@ async def phase_aggregate(brand: str, job: Dict[str, Any]):
                 analysis = json.loads(m.group(0))
             else:
                 analysis = {"win_rate": 0, "competitors": [], "sources": [], "insight": "Analysis failed"}
+        except JobCancelledException:
+            raise  # Re-raise cancellation
         except Exception as e:
             analysis = {"win_rate": 0, "competitors": [], "sources": [], "insight": f"Error: {str(e)}"}
 
@@ -299,6 +320,7 @@ async def create_job(req: CreateJobRequest, bg: BackgroundTasks):
         "brand_name": brand,
         "website_url": n(req.website_url),
         "status": "running",
+        "cancelled": False,  # Cancellation flag
         "logs": [],
         "candidates": [],
         "trial_results": [],
@@ -314,6 +336,9 @@ async def create_job(req: CreateJobRequest, bg: BackgroundTasks):
             
             await phase_aggregate(brand, JOBS[job_id])
             
+        except JobCancelledException:
+            # Job was cancelled - status already set by cancel endpoint
+            JOBS[job_id]["logs"].append("> Job stopped (cancelled)")
         except Exception as e:
             JOBS[job_id]["status"] = "failed"
             JOBS[job_id]["logs"].append(f"! Error: {str(e)}")
@@ -337,7 +362,7 @@ async def stream_job(job_id: str):
                 yield f"data: {logs[i]}\n\n"
                 i += 1
                 heartbeat_counter = 0  # Reset on real message
-            if job["status"] in ("completed", "failed"):
+            if job["status"] in ("completed", "failed", "cancelled"):
                 yield f"data: > {job['status'].upper()}\n\n"
                 break
             
@@ -382,6 +407,17 @@ async def job_partial(job_id: str):
         "score_explanation": job.get("score_explanation"),
         "score_breakdown": job.get("score_breakdown", []),
     }
+
+@app.post("/discover/jobs/{job_id}/cancel")
+async def cancel_job(job_id: str):
+    """Cancel a running job."""
+    job = JOBS.get(job_id)
+    if not job:
+        raise HTTPException(404, "job not found")
+    job["cancelled"] = True
+    job["status"] = "cancelled"
+    job["logs"].append("> Job cancelled by user")
+    return {"status": "cancelled", "job_id": job_id}
 
 @app.get("/discover/jobs/{job_id}/result")
 async def job_result(job_id: str):

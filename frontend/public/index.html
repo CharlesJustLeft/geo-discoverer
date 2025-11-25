@@ -729,6 +729,10 @@
             es.close(); 
             stopPolling();
             resolve(false);
+          } else if (m.startsWith('> CANCELLED')) { 
+            es.close(); 
+            stopPolling();
+            resolve(false);
           } else { 
             addLog(m); 
             i++; 
@@ -1068,14 +1072,30 @@
       });
     }
 
+    // Cancel any existing job
+    async function cancelCurrentJob() {
+      if (currentJobId) {
+        try {
+          await fetch('/api/discover/cancel?job_id=' + currentJobId, { method: 'POST' });
+          console.log('Cancelled previous job:', currentJobId);
+        } catch (err) {
+          console.log('Could not cancel previous job:', err);
+        }
+      }
+    }
+
     async function startSimulation(e) { 
       e.preventDefault(); 
       const brand = document.getElementById('companyName').value; 
       const site = document.getElementById('websiteUrl').value; 
       
+      // Cancel any existing job before starting new one
+      await cancelCurrentJob();
+      
       // Reset state
       dashboardShown = false;
       stopPolling();
+      document.getElementById('log-container').innerHTML = '';
       
       document.getElementById('loadingBrandName').innerText = brand; 
       document.getElementById('dashBrandName').innerText = brand; 
@@ -1137,8 +1157,10 @@
     document.getElementById('newBtn').addEventListener('click', openModal);
 
     document.getElementById('modal-cancel').addEventListener('click', closeModal);
-    document.getElementById('modal-confirm').addEventListener('click', () => {
+    document.getElementById('modal-confirm').addEventListener('click', async () => {
       closeModal();
+      // Cancel any running job
+      await cancelCurrentJob();
       currentResults = null;
       currentJobId = null;
       dashboardShown = false;
