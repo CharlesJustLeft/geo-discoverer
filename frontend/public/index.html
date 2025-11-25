@@ -270,18 +270,18 @@
         print-color-adjust: exact !important;
       }
 
-      nav, 
-      #downloadBtn, 
-      #newBtn, 
-      .input-card, 
-      #view-home, 
+      nav,
+      #downloadBtn,
+      #newBtn,
+      .input-card,
+      #view-home,
       #view-loading,
       .shape,
-      details > summary, 
+      details>summary,
       button,
       #custom-modal,
-      #result-modal { 
-        display: none !important; 
+      #result-modal {
+        display: none !important;
       }
 
       #view-dashboard {
@@ -294,29 +294,43 @@
         padding: 0 !important;
         overflow: visible !important;
       }
-      
+
       body {
         background-color: #0E1117 !important;
         color: #FAFAFA !important;
       }
 
-      .metric-card, .bg-\[\#161B22\] {
+      .metric-card,
+      .bg-\[\#161B22\] {
         break-inside: avoid;
         page-break-inside: avoid;
         background-color: #161B22 !important;
         border: 1px solid #374151 !important;
       }
-      
-      h1, h2, h3 {
+
+      h1,
+      h2,
+      h3 {
         break-after: avoid;
         page-break-after: avoid;
       }
 
       /* Force text colors for legibility on print */
-      .text-gray-400 { color: #9CA3AF !important; }
-      .text-white { color: #FFFFFF !important; }
-      .text-green-400 { color: #4ADE80 !important; }
-      .text-blue-400 { color: #60A5FA !important; }
+      .text-gray-400 {
+        color: #9CA3AF !important;
+      }
+
+      .text-white {
+        color: #FFFFFF !important;
+      }
+
+      .text-green-400 {
+        color: #4ADE80 !important;
+      }
+
+      .text-blue-400 {
+        color: #60A5FA !important;
+      }
     }
   </style>
 </head>
@@ -340,9 +354,11 @@
     class="flex-grow flex flex-col lg:flex-row items-center justify-center max-w-7xl mx-auto w-full px-6 pb-12 fade-in z-10 relative gap-12 h-full">
     <div class="flex-1 text-left">
       <div class="system-badge mb-6">> SYSTEM_READY // AI_DISCOVERY_MODULE</div>
-      <h1 class="hero-title mb-6 text-white">SEE HOW AI SHOWS<br>YOUR BRAND <span class="highlight-blue">TO PEOPLE</span>
+      <h1 class="hero-title mb-6 text-white">SEE HOW AI SHOWS<br>YOUR BRAND <span class="highlight-blue">TO
+          PEOPLE</span>
       </h1>
-      <p class="text-gray-400 text-lg max-w-lg leading-relaxed mb-8">Stop guessing. See exactly who finds your brand on ChatGPT, Claude, Gemini, and how.</p>
+      <p class="text-gray-400 text-lg max-w-lg leading-relaxed mb-8">Stop guessing. See exactly who finds your brand on
+        ChatGPT, Claude, Gemini, and how.</p>
       <div class="flex flex-wrap gap-4 text-sm font-mono text-gray-500">
         <div class="flex items-center gap-2"><span class="text-green-500">✓</span> 25 Parallel Sims</div>
         <div class="flex items-center gap-2"><span class="text-green-500">✓</span> Agentic Evals</div>
@@ -458,7 +474,8 @@
         <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity text-6xl">📈</div>
         <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Discovery Score</div>
         <div id="dynamic-discovery-score" class="text-2xl font-bold text-white font-heading"></div>
-        <div id="score-level-badge" class="text-xs text-blue-400 mt-3 font-mono bg-blue-400/10 inline-block px-2 py-1 rounded">CALCULATING...
+        <div id="score-level-badge"
+          class="text-xs text-blue-400 mt-3 font-mono bg-blue-400/10 inline-block px-2 py-1 rounded">CALCULATING...
         </div>
       </div>
       <div class="metric-card rounded-xl p-6 relative overflow-hidden group">
@@ -471,44 +488,44 @@
     </div>
 
     <!-- NEW: Score Breakdown Section -->
-    <div class="bg-[#161B22] border border-gray-800 rounded-xl p-6 mb-12">
-      <div class="flex items-center gap-3 mb-6">
-        <span class="text-xl">🧠</span>
-        <h3 class="text-lg font-bold text-white">Strategic Analysis</h3>
-      </div>
+    <!-- NEW: Score Breakdown Section -->
+    <div class="mb-12">
+      <h3 class="text-2xl font-bold font-heading mb-2">Strategic Analysis</h3>
+      <div class="bg-[#1F2937] border border-gray-700 rounded-xl p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <!-- Left: AI Narrative -->
+          <div class="lg:col-span-1">
+            <h4 class="text-gray-400 mb-3 font-medium">Assessment</h4>
+            <p id="dynamic-score-explanation" class="text-gray-300 leading-relaxed font-light text-sm">
+              <span class="animate-pulse">Waiting for analysis...</span>
+            </p>
+          </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <!-- Left: AI Narrative -->
-        <div class="lg:col-span-1">
-          <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Assessment</h4>
-          <p id="dynamic-score-explanation" class="text-gray-300 leading-relaxed font-light text-sm">
-            <span class="animate-pulse">Waiting for analysis...</span>
-          </p>
-        </div>
+          <!-- Right: Visualization & Data -->
+          <div class="lg:col-span-2">
+            <h4 class="text-gray-400 mb-3 font-medium">Score Contribution (Max 20pts each)</h4>
+            <div id="score-chart-container" class="space-y-3 mb-6"></div>
 
-        <!-- Right: Visualization & Data -->
-        <div class="lg:col-span-2">
-           <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Score Contribution (Max 20pts each)</h4>
-           <div id="score-chart-container" class="space-y-3 mb-6"></div>
-
-           <details class="group">
-             <summary class="text-xs text-blue-400 cursor-pointer hover:text-blue-300 flex items-center gap-2 select-none">
-               <span>▶ Show Calculation Details</span>
-             </summary>
-             <div class="mt-4 overflow-hidden rounded-lg border border-gray-800">
-               <table class="w-full text-left text-xs">
-                 <thead class="bg-gray-800 text-gray-400">
-                   <tr>
-                     <th class="p-2">Persona</th>
-                     <th class="p-2">Win Rate</th>
-                     <th class="p-2">Complexity</th>
-                     <th class="p-2 text-right">Points</th>
-                   </tr>
-                 </thead>
-                 <tbody id="score-table-body" class="text-gray-300 divide-y divide-gray-800"></tbody>
-               </table>
-             </div>
-           </details>
+            <details class="group">
+              <summary
+                class="text-xs text-blue-400 cursor-pointer hover:text-blue-300 flex items-center gap-2 select-none">
+                <span>▶ Show Calculation Details</span>
+              </summary>
+              <div class="mt-4 overflow-hidden rounded-lg border border-gray-800">
+                <table class="w-full text-left text-xs">
+                  <thead class="bg-gray-800 text-gray-400">
+                    <tr>
+                      <th class="p-2">Persona</th>
+                      <th class="p-2">Win Rate</th>
+                      <th class="p-2">Complexity</th>
+                      <th class="p-2 text-right">Points</th>
+                    </tr>
+                  </thead>
+                  <tbody id="score-table-body" class="text-gray-300 divide-y divide-gray-800"></tbody>
+                </table>
+              </div>
+            </details>
+          </div>
         </div>
       </div>
     </div>
