@@ -553,10 +553,11 @@ async def job_partial(job_id: str):
 
 @app.post("/discover/jobs/{job_id}/cancel")
 async def cancel_job(job_id: str):
-    """Cancel a running job."""
+    """Cancel a running job. Returns success even if job doesn't exist (idempotent)."""
     job = JOBS.get(job_id)
     if not job:
-        raise HTTPException(404, "job not found")
+        # Job doesn't exist (already completed, failed, or server restarted) - that's OK
+        return {"status": "not_found", "job_id": job_id, "message": "Job not found (may have already completed)"}
     job["cancelled"] = True
     job["status"] = "cancelled"
     job["logs"].append("Job cancelled by user")
