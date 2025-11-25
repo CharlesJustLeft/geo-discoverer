@@ -551,6 +551,28 @@
     </div>
   </div>
 
+  <!-- Error Modal -->
+  <div id="error-modal"
+    class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center transition-opacity duration-200 opacity-0">
+    <div
+      class="bg-[#161B22] border border-red-900/50 rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl transform scale-95 transition-transform duration-200"
+      id="error-modal-content">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+          <span class="text-red-400 text-xl">!</span>
+        </div>
+        <h3 class="text-xl font-bold font-heading text-white" id="error-modal-title">Error</h3>
+      </div>
+      <p class="text-gray-400 text-sm mb-8 leading-relaxed" id="error-modal-message">
+        Something went wrong. Please try again.
+      </p>
+      <div class="flex gap-3 justify-end">
+        <button id="error-modal-close" class="secondary-button px-6 py-2 text-sm">Close</button>
+        <button id="error-modal-retry" class="vibrant-button px-6 py-2 text-sm">Try Again</button>
+      </div>
+    </div>
+  </div>
+
   <div id="view-dashboard" class="hidden flex-grow p-6 md:p-12 max-w-7xl mx-auto w-full fade-in z-10 relative h-full">
     <div
       class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 border-b border-gray-800 pb-8">
@@ -732,8 +754,8 @@
           const m = e.data || ''; 
           console.log('Stream message:', m); 
           
-          // Switch to dashboard when Stage 3 starts
-          if (m.includes('Stage 3') && !dashboardShown) {
+          // Switch to dashboard when Stage 2 starts (earlier than before)
+          if (m.includes('Stage 2') && !dashboardShown) {
             dashboardShown = true;
             switchView('dashboard');
             renderInitialDashboard();
@@ -747,6 +769,8 @@
           } else if (m.startsWith('> FAILED')) { 
             es.close(); 
             stopPolling();
+            // Show error modal to user
+            showErrorModal('Analysis Failed', 'The analysis encountered an error. This may be due to API overload. Please try again in a moment.');
             resolve(false);
           } else if (m.startsWith('> CANCELLED')) { 
             es.close(); 
@@ -787,7 +811,7 @@
       const badge = document.getElementById('score-level-badge');
       badge.className = 'text-xs text-blue-400 mt-3 font-mono bg-blue-400/10 inline-block px-2 py-1 rounded';
       badge.innerHTML = '<span class="live-indicator"><span class="live-dot"></span>ANALYZING...</span>';
-      
+
       // Set loading state for strategic analysis
       document.getElementById('dynamic-score-explanation').innerHTML = '<span class="updating text-gray-500">Generating strategic analysis...</span>';
       
@@ -1005,6 +1029,45 @@
     document.getElementById('result-modal-close').addEventListener('click', closeResultModal);
     resultModal.addEventListener('click', (e) => {
       if (e.target === resultModal) closeResultModal();
+    });
+
+    // Error Modal Functions
+    const errorModal = document.getElementById('error-modal');
+    const errorModalContent = document.getElementById('error-modal-content');
+
+    function showErrorModal(title, message) {
+      document.getElementById('error-modal-title').innerText = title;
+      document.getElementById('error-modal-message').innerText = message;
+      errorModal.classList.remove('hidden');
+      setTimeout(() => {
+        errorModal.classList.remove('opacity-0');
+        errorModalContent.classList.remove('scale-95');
+        errorModalContent.classList.add('scale-100');
+      }, 10);
+    }
+
+    function closeErrorModal() {
+      errorModal.classList.add('opacity-0');
+      errorModalContent.classList.remove('scale-100');
+      errorModalContent.classList.add('scale-95');
+      setTimeout(() => {
+        errorModal.classList.add('hidden');
+      }, 200);
+    }
+
+    document.getElementById('error-modal-close').addEventListener('click', () => {
+      closeErrorModal();
+      switchView('landing');
+    });
+    document.getElementById('error-modal-retry').addEventListener('click', () => {
+      closeErrorModal();
+      switchView('landing');
+    });
+    errorModal.addEventListener('click', (e) => {
+      if (e.target === errorModal) {
+        closeErrorModal();
+        switchView('landing');
+      }
     });
 
     function renderResults(res) {
