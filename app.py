@@ -257,8 +257,8 @@ async def phase_aggregate(brand: str, job: Dict[str, Any]):
     # Sort paths by win_rate after all complete
     job["paths"] = sorted(job["paths"], key=lambda p: p["win_rate"], reverse=True)
 
-    if paths:
-        top = paths[0]
+    if job["paths"]:
+        top = job["paths"][0]
         job["top_persona"] = top["persona_name"]
         job["highest_win_rate"] = f"{top['win_rate']}%"
         job["top_competitor"] = (top["competitors"][0] if top["competitors"] else "")
@@ -268,7 +268,7 @@ async def phase_aggregate(brand: str, job: Dict[str, Any]):
         job["top_competitor"] = ""
 
     # Calculate Discovery Score
-    score_data = calculate_discovery_score(paths)
+    score_data = calculate_discovery_score(job["paths"])
     job["discovery_score"] = score_data["score"]
     job["score_level"] = score_data["level"]
     job["score_breakdown"] = score_data["breakdown"] # Store breakdown
@@ -276,7 +276,7 @@ async def phase_aggregate(brand: str, job: Dict[str, Any]):
     # Call AI for explanation
     job["logs"].append("> Generating Strategic Breakdown...")
     try:
-        expl = await gen_medium(prompt_score_explanation(brand, job["discovery_score"], job["score_level"], paths))
+        expl = await gen_medium(prompt_score_explanation(brand, job["discovery_score"], job["score_level"], job["paths"]))
         job["score_explanation"] = expl.strip()
     except Exception:
         job["score_explanation"] = "Analysis unavailable."
@@ -330,14 +330,23 @@ async def stream_job(job_id: str):
         raise HTTPException(404, "job not found")
     async def gen():
         i = 0
+        heartbeat_counter = 0
         while True:
             logs = job["logs"]
             while i < len(logs):
                 yield f"data: {logs[i]}\n\n"
                 i += 1
+                heartbeat_counter = 0  # Reset on real message
             if job["status"] in ("completed", "failed"):
                 yield f"data: > {job['status'].upper()}\n\n"
                 break
+            
+            # Send heartbeat every 5 seconds to keep connection alive (25 * 0.2s = 5s)
+            heartbeat_counter += 1
+            if heartbeat_counter >= 25:
+                yield f"data: > ...\n\n"
+                heartbeat_counter = 0
+                
             await asyncio.sleep(0.2)
     return StreamingResponse(gen(), media_type="text/event-stream")
 
