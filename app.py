@@ -169,7 +169,7 @@ def calculate_discovery_score(paths: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 async def phase_backprop(brand: str, site: Optional[str], job: Dict[str, Any]):
     check_cancelled(job)  # Check before starting
-    job["logs"].append("> Stage 1: Reverse-Engineering 5 Potential User Personas...")
+    job["logs"].append("Stage 1: Reverse-Engineering 5 Potential User Personas...")
     raw = await gen_high_search(prompt_backprop(brand, site))
     m = re.search(r"\[.*\]", raw, re.S)
     if not m:
@@ -183,11 +183,11 @@ async def phase_backprop(brand: str, site: Optional[str], job: Dict[str, Any]):
             "trigger_prompt": n(c.get("trigger_prompt")),
         })
     job["candidates"] = cands
-    job["logs"].append(f"> Discovery Complete. Found {len(cands)} candidate personas.")
+    job["logs"].append(f"Discovery Complete. Found {len(cands)} candidate personas.")
 
 async def phase_trials(brand: str, job: Dict[str, Any], trials: int, concurrency: int):
     check_cancelled(job)  # Check before starting
-    job["logs"].append("> Stage 2: Running 25 Parallel Simulations...")
+    job["logs"].append("Stage 2: Running 25 Parallel tests...")
     sem = asyncio.Semaphore(concurrency)
 
     async def one(cidx: int, tidx: int, hidden: str, trigger: str) -> Dict[str, Any]:
@@ -210,11 +210,11 @@ async def phase_trials(brand: str, job: Dict[str, Any], trials: int, concurrency
     job["trial_results"] = [r for r in results if isinstance(r, dict)]
     
     check_cancelled(job)  # Check after completion
-    job["logs"].append("> Simulations Completed.")
+    job["logs"].append("Tests Completed.")
 
 async def phase_aggregate(brand: str, job: Dict[str, Any]):
     check_cancelled(job)  # Check before starting
-    job["logs"].append("> Stage 3: Analyzing Results with LLM Analyst...")
+    job["logs"].append("Stage 3: Analyzing Results with LLM Analyst...")
     job["status"] = "analyzing"  # Intermediate status for progressive loading
     
     buckets: Dict[int, List[str]] = {}
@@ -245,7 +245,7 @@ async def phase_aggregate(brand: str, job: Dict[str, Any]):
     async def analyze_one(idx: int, responses: List[str]):
         check_cancelled(job)  # Check before each analysis
         cand = job["candidates"][idx]
-        job["logs"].append(f"> Analyzing Persona {idx+1}: {cand['persona_name']}...")
+        job["logs"].append(f"Analyzing Persona {idx+1}: {cand['persona_name']}...")
 
         try:
             analysis_raw = await gen_medium(prompt_analyst(brand, cand["persona_name"], responses))
@@ -269,7 +269,7 @@ async def phase_aggregate(brand: str, job: Dict[str, Any]):
             "analysis_complete": True,
         })
         
-        job["logs"].append(f"> ✓ Persona {idx+1} Complete: {analysis.get('win_rate', 0)}% win rate")
+        job["logs"].append(f"✓ Persona {idx+1} Complete: {analysis.get('win_rate', 0)}% win rate")
 
     # Run analyses in parallel but update progressively
     tasks = [analyze_one(idx, responses) for idx, responses in buckets.items()]
@@ -295,16 +295,16 @@ async def phase_aggregate(brand: str, job: Dict[str, Any]):
     job["score_breakdown"] = score_data["breakdown"] # Store breakdown
 
     # Call AI for explanation
-    job["logs"].append("> Generating Strategic Breakdown...")
+    job["logs"].append("Generating Strategic Breakdown...")
     try:
         expl = await gen_medium(prompt_score_explanation(brand, job["discovery_score"], job["score_level"], job["paths"]))
         job["score_explanation"] = expl.strip()
     except Exception:
         job["score_explanation"] = "Analysis unavailable."
 
-    job["logs"].append(f"> Discovery Score: {score_data['score']}/100 ({score_data['level']})")
+    job["logs"].append(f"Discovery Score: {score_data['score']}/100 ({score_data['level']})")
 
-    job["logs"].append("> Report Ready.")
+    job["logs"].append("Report Ready.")
     job["status"] = "completed"
 
 # --- API ---
@@ -416,7 +416,7 @@ async def cancel_job(job_id: str):
         raise HTTPException(404, "job not found")
     job["cancelled"] = True
     job["status"] = "cancelled"
-    job["logs"].append("> Job cancelled by user")
+    job["logs"].append("Job cancelled by user")
     return {"status": "cancelled", "job_id": job_id}
 
 @app.get("/discover/jobs/{job_id}/result")
