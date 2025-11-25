@@ -662,6 +662,7 @@
     let currentResults = null;
     let pollingInterval = null;
     let dashboardShown = false;
+    let currentEventSource = null;  // Track EventSource to close on new simulation
 
     function switchView(v) { 
       Object.values(views).forEach(el => el.classList.add('hidden')); 
@@ -694,7 +695,14 @@
 
     function streamLogs(job_id) { 
       return new Promise((resolve) => { 
-        const es = new EventSource('/api/discover/stream?job_id=' + job_id); 
+        // Close any existing EventSource before creating new one
+        if (currentEventSource) {
+          currentEventSource.close();
+          currentEventSource = null;
+        }
+        
+        const es = new EventSource('/api/discover/stream?job_id=' + job_id);
+        currentEventSource = es;  // Store reference for cleanup
         let i = 0; 
         
         es.onopen = () => { 
@@ -1072,8 +1080,15 @@
       });
     }
 
-    // Cancel any existing job
+    // Cancel any existing job and close EventSource
     async function cancelCurrentJob() {
+      // Close existing EventSource first to stop receiving old logs
+      if (currentEventSource) {
+        currentEventSource.close();
+        currentEventSource = null;
+        console.log('Closed previous EventSource');
+      }
+      
       if (currentJobId) {
         try {
           await fetch('/api/discover/cancel?job_id=' + currentJobId, { method: 'POST' });
