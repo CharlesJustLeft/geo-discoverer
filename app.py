@@ -204,12 +204,12 @@ async def gen_medium(prompt: str) -> str:
         raise RuntimeError(f"Gemini API timed out after {GEMINI_TIMEOUT}s (gen_medium)")
 
 async def gen_judge(prompt: str) -> str:
-    """Use gemini-2.0-flash for fast scoring judgments in the tribunal. 90s timeout."""
+    """Use gemini-2.5-flash for accurate scoring judgments in the tribunal. 90s timeout."""
     try:
         resp = await asyncio.wait_for(
             asyncio.to_thread(
                 client.models.generate_content,
-                model="gemini-2.0-flash",
+                model="gemini-2.5-flash",
                 contents=prompt,
             ),
             timeout=GEMINI_TIMEOUT
