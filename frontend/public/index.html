@@ -7,7 +7,6 @@
   <title>GEO Discoverer | AI Brand Visibility</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://unpkg.com/pagedjs/dist/paged.polyfill.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -257,81 +256,6 @@
     .dot-green {
       background: #27C93F
     }
-
-    @media print {
-      @page {
-        size: A4;
-        margin: 10mm;
-        background-color: #0E1117;
-      }
-
-      * {
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-
-      nav,
-      #downloadBtn,
-      #newBtn,
-      .input-card,
-      #view-home,
-      #view-loading,
-      .shape,
-      details>summary,
-      button,
-      #custom-modal,
-      #result-modal {
-        display: none !important;
-      }
-
-      #view-dashboard {
-        display: block !important;
-        opacity: 1 !important;
-        position: relative !important;
-        width: 100% !important;
-        max-width: none !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        overflow: visible !important;
-      }
-
-      body {
-        background-color: #0E1117 !important;
-        color: #FAFAFA !important;
-      }
-
-      .metric-card,
-      .bg-\[\#161B22\] {
-        break-inside: avoid;
-        page-break-inside: avoid;
-        background-color: #161B22 !important;
-        border: 1px solid #374151 !important;
-      }
-
-      h1,
-      h2,
-      h3 {
-        break-after: avoid;
-        page-break-after: avoid;
-      }
-
-      /* Force text colors for legibility on print */
-      .text-gray-400 {
-        color: #9CA3AF !important;
-      }
-
-      .text-white {
-        color: #FFFFFF !important;
-      }
-
-      .text-green-400 {
-        color: #4ADE80 !important;
-      }
-
-      .text-blue-400 {
-        color: #60A5FA !important;
-      }
-    }
   </style>
 </head>
 
@@ -488,47 +412,7 @@
     </div>
 
     <!-- NEW: Score Breakdown Section -->
-    <!-- NEW: Score Breakdown Section -->
-    <div class="bg-[#1F2937] border border-[#374151] rounded-xl p-6 mb-12">
-      <h3 class="text-2xl font-bold font-heading mb-6">Strategic Analysis</h3>
 
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <!-- Left: AI Narrative -->
-        <div class="lg:col-span-1">
-          <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Assessment</h4>
-          <p id="dynamic-score-explanation" class="text-gray-300 leading-relaxed font-light text-sm">
-            <span class="animate-pulse">Waiting for analysis...</span>
-          </p>
-        </div>
-
-        <!-- Right: Visualization & Data -->
-        <div class="lg:col-span-2">
-          <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Score Contribution (Max 20pts each)
-          </h4>
-          <div id="score-chart-container" class="space-y-3 mb-6"></div>
-
-          <details class="group">
-            <summary
-              class="text-xs text-blue-400 cursor-pointer hover:text-blue-300 flex items-center gap-2 select-none">
-              <span>▶ Show Calculation Details</span>
-            </summary>
-            <div class="mt-4 overflow-hidden rounded-lg border border-gray-800">
-              <table class="w-full text-left text-xs">
-                <thead class="bg-gray-800 text-gray-400">
-                  <tr>
-                    <th class="p-2">Persona</th>
-                    <th class="p-2">Win Rate</th>
-                    <th class="p-2">Complexity</th>
-                    <th class="p-2 text-right">Points</th>
-                  </tr>
-                </thead>
-                <tbody id="score-table-body" class="text-gray-300 divide-y divide-gray-800"></tbody>
-              </table>
-            </div>
-          </details>
-        </div>
-      </div>
-    </div>
     <!-- END NEW SECTION -->
 
     <div class="mb-12">
@@ -615,43 +499,6 @@
       }
       document.getElementById('dynamic-competitor').innerText = res.top_competitor || '';
 
-      // 1. Render Narrative
-      document.getElementById('dynamic-score-explanation').innerText = res.score_explanation || 'No analysis available.';
-
-      // 2. Render Bar Chart & Table
-      const chartContainer = document.getElementById('score-chart-container');
-      const tableBody = document.getElementById('score-table-body');
-      chartContainer.innerHTML = '';
-      tableBody.innerHTML = '';
-
-      (res.score_breakdown || []).forEach(item => {
-        // Bar Chart
-        const widthPct = (item.points / 20) * 100;
-        let colorClass = 'bg-red-500';
-        if (item.points >= 12) colorClass = 'bg-green-500';
-        else if (item.points >= 6) colorClass = 'bg-yellow-500';
-
-        chartContainer.innerHTML += `
-            <div class="flex items-center gap-3 text-xs">
-              <div class="w-24 truncate text-gray-400" title="${item.persona}">${item.persona}</div>
-              <div class="flex-grow bg-gray-800 h-2 rounded-full overflow-hidden">
-                <div class="${colorClass} h-full transition-all duration-500" style="width: ${widthPct}%"></div>
-              </div>
-              <div class="w-8 text-right font-mono text-white">${item.points}</div>
-            </div>
-          `;
-
-        // Detail Table
-        tableBody.innerHTML += `
-            <tr>
-              <td class="p-2">${item.persona}</td>
-              <td class="p-2 font-mono">${item.win_rate}%</td>
-              <td class="p-2"><span class="bg-gray-800 px-1.5 py-0.5 rounded text-[10px]">${item.complexity_label} (x${item.complexity_multiplier})</span></td>
-              <td class="p-2 text-right font-mono font-bold text-white">${item.points}</td>
-            </tr>
-          `;
-      });
-
       const tbody = document.getElementById('results-table-body');
       tbody.innerHTML = '';
 
@@ -695,8 +542,73 @@
     let currentResults = null;
     function downloadPDF() {
       if (!currentResults) { alert('No results available to download'); return; }
-      // Use browser print dialog which is styled by CSS @media print
-      window.print();
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 20;
+      let y = 20;
+
+      // Title
+      doc.setFontSize(20);
+      doc.setFont(undefined, 'bold');
+      doc.text('GEO Discoverer Report', margin, y);
+      y += 10;
+
+      // Brand name
+      doc.setFontSize(16);
+      doc.text(`Brand: ${currentResults.brand_name}`, margin, y);
+      y += 15;
+
+      // Key metrics
+      doc.setFontSize(12);
+      doc.setFont(undefined, 'bold');
+      doc.text('Key Metrics', margin, y);
+      y += 8;
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(10);
+      doc.text(`Winning Persona: ${currentResults.top_persona || 'N/A'}`, margin + 5, y);
+      y += 6;
+      doc.text(`Highest Win Rate: ${currentResults.highest_win_rate || 'N/A'}`, margin + 5, y);
+      y += 6;
+      doc.text(`Top Competitor: ${currentResults.top_competitor || 'N/A'}`, margin + 5, y);
+      y += 12;
+
+      // Discovery paths
+      doc.setFontSize(12);
+      doc.setFont(undefined, 'bold');
+      doc.text('Discovery Paths', margin, y);
+      y += 8;
+
+      (currentResults.paths || []).forEach((path, idx) => {
+        if (y > 250) { doc.addPage(); y = 20; }
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.text(`${idx + 1}. ${path.persona_name}`, margin + 5, y);
+        y += 6;
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(9);
+        const triggerLines = doc.splitTextToSize(`Trigger: ${path.trigger_prompt}`, pageWidth - margin * 2 - 10);
+        doc.text(triggerLines, margin + 10, y);
+        y += triggerLines.length * 5;
+        doc.text(`Frequency: ${path.frequency_count}/${path.frequency_total}`, margin + 10, y);
+        y += 5;
+        const attrLines = doc.splitTextToSize(`Insight: ${path.attribution}`, pageWidth - margin * 2 - 10);
+        doc.text(attrLines, margin + 10, y);
+        y += attrLines.length * 5;
+        if (path.competitors && path.competitors.length > 0) {
+          doc.text(`Competitors: ${path.competitors.join(', ')}`, margin + 10, y);
+          y += 5;
+        }
+        y += 5;
+      });
+
+      // Footer
+      const timestamp = new Date().toISOString().split('T')[0];
+      doc.setFontSize(8);
+      doc.setTextColor(128);
+      doc.text(`Generated by GEO Discoverer on ${timestamp}`, margin, doc.internal.pageSize.getHeight() - 10);
+
+      doc.save(`GEO_Discoverer_${currentResults.brand_name.replace(/\s+/g, '_')}_${timestamp}.pdf`);
     }
 
     // Modal Logic
