@@ -257,6 +257,70 @@
       background: #27C93F
     }
 
+    /* Skeleton loading animation */
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+
+    .skeleton {
+      background: linear-gradient(90deg, #1F2937 25%, #374151 50%, #1F2937 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 4px;
+    }
+
+    .skeleton-text {
+      height: 1em;
+      width: 100%;
+    }
+
+    .skeleton-text-sm {
+      height: 0.75em;
+      width: 60%;
+    }
+
+    /* Row fade-in animation */
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateX(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .row-animate {
+      animation: slideIn 0.4s ease-out forwards;
+    }
+
+    /* Pulse animation for updating values */
+    @keyframes pulse-update {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .updating {
+      animation: pulse-update 1s ease-in-out infinite;
+    }
+
+    /* Live indicator */
+    .live-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      background: #10B981;
+      border-radius: 50%;
+      animation: pulse-update 1s ease-in-out infinite;
+    }
+
     @media print {
       @page {
         size: A4;
@@ -594,14 +658,292 @@
   </div>
   <script>
     const views = { home: document.getElementById('view-home'), loading: document.getElementById('view-loading'), dashboard: document.getElementById('view-dashboard') };
-    function switchView(v) { Object.values(views).forEach(el => el.classList.add('hidden')); views[v].classList.remove('hidden'); if (v === 'dashboard') { document.body.classList.remove('overflow-hidden') } }
-    function setProgress(p) { document.getElementById('progressBar').style.width = p + '%' }
-    function addLog(t) { const c = document.getElementById('log-container'); const d = document.createElement('div'); d.className = 'flex items-center gap-3 fade-in'; d.innerHTML = '<span class="text-blue-500 font-bold">></span> <span class="text-gray-300">' + t + '</span>'; c.appendChild(d); c.scrollTop = c.scrollHeight }
-    async function createJob(brand, site) { const r = await fetch('/api/discover', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brand_name: brand, website_url: site }) }); if (!r.ok) { let errorMsg = 'job create failed'; try { const errorData = await r.json(); errorMsg = errorData.error || errorMsg; } catch (e) { errorMsg = `${errorMsg} (${r.status} ${r.statusText})`; } throw new Error(errorMsg); } return r.json() }
-    function streamLogs(job_id) { return new Promise((resolve) => { const es = new EventSource('/api/discover/stream?job_id=' + job_id); let i = 0; es.onopen = () => { console.log('Stream connected'); addLog('Connected to backend...'); }; es.onerror = (err) => { console.error('Stream error:', err); addLog('Stream connection error'); es.close(); resolve(false); }; es.onmessage = (e) => { const m = e.data || ''; console.log('Stream message:', m); if (m.startsWith('> COMPLETED')) { es.close(); resolve(true) } else if (m.startsWith('> FAILED')) { es.close(); resolve(false) } else { addLog(m); i++; setProgress(Math.min(100, 20 + i * 5)) } } }) }
-    async function fetchResult(job_id) { const r = await fetch('/api/discover/result?job_id=' + job_id); if (!r.ok) throw new Error('result fetch failed'); return r.json() }
+    let currentJobId = null;
+    let currentResults = null;
+    let pollingInterval = null;
+    let dashboardShown = false;
 
-    // New Result Modal Logic
+    function switchView(v) { 
+      Object.values(views).forEach(el => el.classList.add('hidden')); 
+      views[v].classList.remove('hidden'); 
+      if (v === 'dashboard') { 
+        document.body.classList.remove('overflow-hidden');
+      }
+    }
+
+    function setProgress(p) { document.getElementById('progressBar').style.width = p + '%' }
+    
+    function addLog(t) { 
+      const c = document.getElementById('log-container'); 
+      const d = document.createElement('div'); 
+      d.className = 'flex items-center gap-3 fade-in'; 
+      d.innerHTML = '<span class="text-blue-500 font-bold">></span> <span class="text-gray-300">' + t + '</span>'; 
+      c.appendChild(d); 
+      c.scrollTop = c.scrollHeight;
+    }
+
+    async function createJob(brand, site) { 
+      const r = await fetch('/api/discover', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brand_name: brand, website_url: site }) }); 
+      if (!r.ok) { 
+        let errorMsg = 'job create failed'; 
+        try { const errorData = await r.json(); errorMsg = errorData.error || errorMsg; } catch (e) { errorMsg = `${errorMsg} (${r.status} ${r.statusText})`; } 
+        throw new Error(errorMsg); 
+      } 
+      return r.json();
+    }
+
+    function streamLogs(job_id) { 
+      return new Promise((resolve) => { 
+        const es = new EventSource('/api/discover/stream?job_id=' + job_id); 
+        let i = 0; 
+        
+        es.onopen = () => { 
+          console.log('Stream connected'); 
+          addLog('Connected to backend...'); 
+        }; 
+        
+        es.onerror = (err) => { 
+          console.error('Stream error:', err); 
+          addLog('Stream connection error'); 
+          es.close(); 
+          resolve(false); 
+        }; 
+        
+        es.onmessage = (e) => { 
+          const m = e.data || ''; 
+          console.log('Stream message:', m); 
+          
+          // Switch to dashboard when Stage 3 starts
+          if (m.includes('Stage 3') && !dashboardShown) {
+            dashboardShown = true;
+            switchView('dashboard');
+            renderInitialDashboard();
+            startPolling(job_id);
+          }
+          
+          if (m.startsWith('> COMPLETED')) { 
+            es.close(); 
+            stopPolling();
+            resolve(true);
+          } else if (m.startsWith('> FAILED')) { 
+            es.close(); 
+            stopPolling();
+            resolve(false);
+          } else { 
+            addLog(m); 
+            i++; 
+            setProgress(Math.min(100, 20 + i * 5));
+          }
+        };
+      });
+    }
+
+    async function fetchPartialResult(job_id) { 
+      const r = await fetch('/api/discover/partial?job_id=' + job_id); 
+      if (!r.ok) throw new Error('partial result fetch failed'); 
+      return r.json();
+    }
+
+    async function fetchResult(job_id) { 
+      const r = await fetch('/api/discover/result?job_id=' + job_id); 
+      if (!r.ok) throw new Error('result fetch failed'); 
+      return r.json();
+    }
+
+    // Initialize dashboard with skeleton/loading states
+    function renderInitialDashboard() {
+      const brand = document.getElementById('companyName').value;
+      document.getElementById('dashBrandName').innerText = brand;
+      
+      // Set loading states for metrics
+      document.getElementById('dynamic-winning-persona').innerHTML = '<div class="skeleton skeleton-text w-32 h-6"></div>';
+      document.getElementById('dynamic-discovery-score').innerHTML = '<span class="updating">--/100</span>';
+      document.getElementById('dynamic-competitor').innerHTML = '<div class="skeleton skeleton-text w-24 h-6"></div>';
+      
+      // Update badge to show live status
+      const badge = document.getElementById('score-level-badge');
+      badge.className = 'text-xs text-blue-400 mt-3 font-mono bg-blue-400/10 inline-block px-2 py-1 rounded';
+      badge.innerHTML = '<span class="live-indicator"><span class="live-dot"></span>ANALYZING...</span>';
+      
+      // Set loading state for strategic analysis
+      document.getElementById('dynamic-score-explanation').innerHTML = '<span class="updating text-gray-500">Generating strategic analysis...</span>';
+      
+      // Clear chart and table
+      document.getElementById('score-chart-container').innerHTML = '<div class="text-gray-500 text-xs updating">Calculating score breakdown...</div>';
+      document.getElementById('score-table-body').innerHTML = '';
+      
+      // Clear paths table
+      document.getElementById('results-table-body').innerHTML = '';
+      document.getElementById('debugger').innerHTML = '';
+    }
+
+    // Start polling for partial results
+    function startPolling(job_id) {
+      if (pollingInterval) clearInterval(pollingInterval);
+      
+      pollingInterval = setInterval(async () => {
+        try {
+          const res = await fetchPartialResult(job_id);
+          renderProgressiveResults(res);
+          
+          if (res.status === 'completed') {
+            stopPolling();
+            currentResults = res;
+            renderFinalResults(res);
+          }
+        } catch (err) {
+          console.error('Polling error:', err);
+        }
+      }, 1000); // Poll every second
+    }
+
+    function stopPolling() {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+      }
+    }
+
+    // Render partial results progressively
+    function renderProgressiveResults(res) {
+      const tbody = document.getElementById('results-table-body');
+      const existingRows = tbody.querySelectorAll('tr');
+      
+      (res.paths || []).forEach((p, pIdx) => {
+        let tr = existingRows[pIdx];
+        const isNew = !tr;
+        
+        if (isNew) {
+          tr = document.createElement('tr');
+          tr.className = 'group cursor-pointer transition-colors hover:bg-[#1c2128] row-animate';
+          tr.style.animationDelay = `${pIdx * 100}ms`;
+          tbody.appendChild(tr);
+        }
+        
+        const barPct = Math.round(100 * p.frequency_count / p.frequency_total);
+        const isAnalyzing = !p.analysis_complete;
+        
+        // Sources Links
+        let sourcesHtml = '';
+        if (p.sources && p.sources.length > 0) {
+          sourcesHtml = p.sources.map(s => {
+            try {
+              return `<a href="${s}" target="_blank" class="text-blue-400 hover:text-blue-300 underline block truncate max-w-[150px] text-xs mb-1">${new URL(s).hostname}</a>`;
+            } catch { return ''; }
+          }).join('');
+        } else if (isAnalyzing) {
+          sourcesHtml = '<span class="skeleton skeleton-text-sm inline-block w-20 h-3"></span>';
+        }
+
+        // Results Links
+        let resultsHtml = '';
+        if (p.trial_responses && p.trial_responses.length > 0) {
+          resultsHtml = p.trial_responses.map((r, rIdx) => {
+            const safeContent = r.replace(/`/g, '\\`').replace(/\$/g, '\\$').replace(/"/g, '&quot;');
+            return `<button onclick="event.stopPropagation(); openResultModal('Result ${rIdx + 1} - ${p.persona_name}', \`${safeContent}\`)" class="text-green-400 hover:text-green-300 hover:underline text-xs block mb-1 text-left">Result ${rIdx + 1}</button>`;
+          }).join('');
+        }
+
+        // Status indicator
+        const statusDot = isAnalyzing 
+          ? '<span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span>'
+          : '<span class="w-2 h-2 rounded-full bg-green-500"></span>';
+
+        tr.innerHTML = `
+          <td class="p-5 pl-6 font-medium text-white">
+            <div class="flex items-center gap-3">${statusDot}${p.persona_name}</div>
+          </td>
+          <td class="p-5 font-mono text-xs text-blue-300 min-w-[200px]">${p.trigger_prompt}</td>
+          <td class="p-5">
+            <div class="flex items-center gap-2">
+              <div class="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                <div class="h-full ${isAnalyzing ? 'bg-yellow-500' : 'bg-green-500'} transition-all duration-500" style="width:${barPct}%"></div>
+              </div>
+              <span class="text-xs font-bold ${isAnalyzing ? 'text-yellow-500 updating' : 'text-green-500'}">${isAnalyzing ? '...' : p.frequency_count + '/' + p.frequency_total}</span>
+            </div>
+          </td>
+          <td class="p-5 text-xs">${isAnalyzing ? '<span class="skeleton skeleton-text-sm inline-block w-24 h-3"></span>' : (p.competitors || []).join(', ')}</td>
+          <td class="p-5 text-xs min-w-[100px]">${resultsHtml}</td>
+          <td class="p-5 text-xs text-gray-400 italic min-w-[200px]">${isAnalyzing ? '<span class="updating">Analyzing...</span>' : p.attribution}</td>
+          <td class="p-5 text-xs">${sourcesHtml}</td>
+        `;
+      });
+
+      // Update top metrics if available
+      if (res.top_persona) {
+        document.getElementById('dynamic-winning-persona').innerText = res.top_persona;
+      }
+      if (res.top_competitor) {
+        document.getElementById('dynamic-competitor').innerText = res.top_competitor;
+      }
+    }
+
+    // Render final results with all animations complete
+    function renderFinalResults(res) {
+      // Update badge to show completion
+      const badge = document.getElementById('score-level-badge');
+      const level = res.score_level || 'LOW';
+      if (level === 'HIGH') {
+        badge.className = 'text-xs text-green-400 mt-3 font-mono bg-green-400/10 inline-block px-2 py-1 rounded';
+        badge.innerText = 'HIGH VISIBILITY';
+      } else if (level === 'MEDIUM') {
+        badge.className = 'text-xs text-blue-400 mt-3 font-mono bg-blue-400/10 inline-block px-2 py-1 rounded';
+        badge.innerText = 'MODERATE';
+      } else {
+        badge.className = 'text-xs text-red-400 mt-3 font-mono bg-red-400/10 inline-block px-2 py-1 rounded';
+        badge.innerText = 'LOW VISIBILITY';
+      }
+
+      // Update score with animation
+      const scoreEl = document.getElementById('dynamic-discovery-score');
+      scoreEl.classList.add('updating');
+      setTimeout(() => {
+        scoreEl.innerText = (res.discovery_score || 0) + '/100';
+        scoreEl.classList.remove('updating');
+      }, 300);
+
+      // Update strategic analysis
+      document.getElementById('dynamic-score-explanation').innerText = res.score_explanation || 'No analysis available.';
+
+      // Render score breakdown chart
+      const chartContainer = document.getElementById('score-chart-container');
+      const tableBody = document.getElementById('score-table-body');
+      chartContainer.innerHTML = '';
+      tableBody.innerHTML = '';
+
+      (res.score_breakdown || []).forEach((item, idx) => {
+        const widthPct = (item.points / 20) * 100;
+        let colorClass = 'bg-red-500';
+        if (item.points >= 12) colorClass = 'bg-green-500';
+        else if (item.points >= 6) colorClass = 'bg-yellow-500';
+
+        const chartRow = document.createElement('div');
+        chartRow.className = 'flex items-center gap-3 text-xs row-animate';
+        chartRow.style.animationDelay = `${idx * 100}ms`;
+        chartRow.innerHTML = `
+          <div class="w-24 truncate text-gray-400" title="${item.persona}">${item.persona}</div>
+          <div class="flex-grow bg-gray-800 h-2 rounded-full overflow-hidden">
+            <div class="${colorClass} h-full transition-all duration-500" style="width: ${widthPct}%"></div>
+          </div>
+          <div class="w-8 text-right font-mono text-white">${item.points}</div>
+        `;
+        chartContainer.appendChild(chartRow);
+
+        tableBody.innerHTML += `
+          <tr>
+            <td class="p-2">${item.persona}</td>
+            <td class="p-2 font-mono">${item.win_rate}%</td>
+            <td class="p-2"><span class="bg-gray-800 px-1.5 py-0.5 rounded text-[10px]">${item.complexity_label} (x${item.complexity_multiplier})</span></td>
+            <td class="p-2 text-right font-mono font-bold text-white">${item.points}</td>
+          </tr>
+        `;
+      });
+
+      // Re-render paths table with final data
+      renderResults(res);
+    }
+
+    // Result Modal Logic
     const resultModal = document.getElementById('result-modal');
     const resultModalContent = document.getElementById('result-modal-content');
     const resultBody = document.getElementById('result-modal-body');
@@ -628,7 +970,6 @@
     }
 
     document.getElementById('result-modal-close').addEventListener('click', closeResultModal);
-    // Close on backdrop click
     resultModal.addEventListener('click', (e) => {
       if (e.target === resultModal) closeResultModal();
     });
@@ -637,6 +978,7 @@
       document.getElementById('dashBrandName').innerText = res.brand_name;
       document.getElementById('dynamic-winning-persona').innerText = res.top_persona || '';
       document.getElementById('dynamic-discovery-score').innerText = (res.discovery_score || 0) + '/100';
+      
       const badge = document.getElementById('score-level-badge');
       const level = res.score_level || 'LOW';
       if (level === 'HIGH') {
@@ -651,41 +993,37 @@
       }
       document.getElementById('dynamic-competitor').innerText = res.top_competitor || '';
 
-      // 1. Render Narrative
       document.getElementById('dynamic-score-explanation').innerText = res.score_explanation || 'No analysis available.';
 
-      // 2. Render Bar Chart & Table
       const chartContainer = document.getElementById('score-chart-container');
       const tableBody = document.getElementById('score-table-body');
       chartContainer.innerHTML = '';
       tableBody.innerHTML = '';
 
       (res.score_breakdown || []).forEach(item => {
-        // Bar Chart
         const widthPct = (item.points / 20) * 100;
         let colorClass = 'bg-red-500';
         if (item.points >= 12) colorClass = 'bg-green-500';
         else if (item.points >= 6) colorClass = 'bg-yellow-500';
 
         chartContainer.innerHTML += `
-            <div class="flex items-center gap-3 text-xs">
-              <div class="w-24 truncate text-gray-400" title="${item.persona}">${item.persona}</div>
-              <div class="flex-grow bg-gray-800 h-2 rounded-full overflow-hidden">
-                <div class="${colorClass} h-full transition-all duration-500" style="width: ${widthPct}%"></div>
-              </div>
-              <div class="w-8 text-right font-mono text-white">${item.points}</div>
+          <div class="flex items-center gap-3 text-xs">
+            <div class="w-24 truncate text-gray-400" title="${item.persona}">${item.persona}</div>
+            <div class="flex-grow bg-gray-800 h-2 rounded-full overflow-hidden">
+              <div class="${colorClass} h-full transition-all duration-500" style="width: ${widthPct}%"></div>
             </div>
-          `;
+            <div class="w-8 text-right font-mono text-white">${item.points}</div>
+          </div>
+        `;
 
-        // Detail Table
         tableBody.innerHTML += `
-            <tr>
-              <td class="p-2">${item.persona}</td>
-              <td class="p-2 font-mono">${item.win_rate}%</td>
-              <td class="p-2"><span class="bg-gray-800 px-1.5 py-0.5 rounded text-[10px]">${item.complexity_label} (x${item.complexity_multiplier})</span></td>
-              <td class="p-2 text-right font-mono font-bold text-white">${item.points}</td>
-            </tr>
-          `;
+          <tr>
+            <td class="p-2">${item.persona}</td>
+            <td class="p-2 font-mono">${item.win_rate}%</td>
+            <td class="p-2"><span class="bg-gray-800 px-1.5 py-0.5 rounded text-[10px]">${item.complexity_label} (x${item.complexity_multiplier})</span></td>
+            <td class="p-2 text-right font-mono font-bold text-white">${item.points}</td>
+          </tr>
+        `;
       });
 
       const tbody = document.getElementById('results-table-body');
@@ -696,12 +1034,14 @@
         tr.className = 'group cursor-pointer transition-colors hover:bg-[#1c2128]';
         const barPct = Math.round(100 * p.frequency_count / p.frequency_total);
 
-        // Sources Links
-        const sourcesHtml = (p.sources || []).map(s => `<a href="${s}" target="_blank" class="text-blue-400 hover:text-blue-300 underline block truncate max-w-[150px] text-xs mb-1">${new URL(s).hostname}</a>`).join('');
+        let sourcesHtml = '';
+        (p.sources || []).forEach(s => {
+          try {
+            sourcesHtml += `<a href="${s}" target="_blank" class="text-blue-400 hover:text-blue-300 underline block truncate max-w-[150px] text-xs mb-1">${new URL(s).hostname}</a>`;
+          } catch {}
+        });
 
-        // Results Links (New)
         const resultsHtml = (p.trial_responses || []).map((r, rIdx) => {
-          // Escape the content for safe passing to onclick
           const safeContent = r.replace(/`/g, '\\`').replace(/\$/g, '\\$').replace(/"/g, '&quot;');
           return `<button onclick="event.stopPropagation(); openResultModal('Result ${rIdx + 1} - ${p.persona_name}', \`${safeContent}\`)" class="text-green-400 hover:text-green-300 hover:underline text-xs block mb-1 text-left">Result ${rIdx + 1}</button>`;
         }).join('');
@@ -714,7 +1054,7 @@
           <td class="p-5 text-xs min-w-[100px]">${resultsHtml}</td>
           <td class="p-5 text-xs text-gray-400 italic min-w-[200px]">${p.attribution}</td>
           <td class="p-5 text-xs">${sourcesHtml}</td>`;
-        tbody.appendChild(tr)
+        tbody.appendChild(tr);
       });
 
       const dbg = document.getElementById('debugger');
@@ -724,14 +1064,52 @@
         details.className = 'mb-4 group';
         details.open = i === 0;
         details.innerHTML = `<summary class="p-4 bg-[#161B22] rounded-lg flex items-center justify-between border border-gray-800 hover:border-gray-600 transition-all"><div class="flex items-center gap-3"><span class="text-green-500 font-bold">✅ Analysis</span></div><div class="text-green-400 text-xs font-mono font-bold border border-green-900 bg-green-900/20 px-2 py-1 rounded">VISIBILITY</div></summary><div class="p-6 bg-[#0D1117] border-x border-b border-gray-800 rounded-b-lg"><div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div><div class="text-xs text-gray-500 font-bold uppercase mb-2 tracking-wider">System Injection (Memory)</div><div class="code-window p-4 text-green-300 leading-relaxed"><div class="code-header mb-3 -mx-4 -mt-4"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div></div>${d.hidden_memory.replace(/\n/g, '<br>')}</div></div><div><div class="text-xs text-gray-500 font-bold uppercase mb-2 tracking-wider">User Trigger</div><div class="code-window p-4 text-blue-300 leading-relaxed"><div class="code-header mb-3 -mx-4 -mt-4"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div></div>${d.trigger_prompt}</div></div></div></div>`;
-        dbg.appendChild(details)
-      })
+        dbg.appendChild(details);
+      });
     }
-    async function startSimulation(e) { e.preventDefault(); const brand = document.getElementById('companyName').value; const site = document.getElementById('websiteUrl').value; document.getElementById('loadingBrandName').innerText = brand; document.getElementById('dashBrandName').innerText = brand; switchView('loading'); try { const { job_id } = await createJob(brand, site); const ok = await streamLogs(job_id); if (!ok) { addLog('Simulation failed'); return } const res = await fetchResult(job_id); currentResults = res; switchView('dashboard'); renderResults(res) } catch (err) { addLog('Error: ' + String(err)) } }
-    let currentResults = null;
+
+    async function startSimulation(e) { 
+      e.preventDefault(); 
+      const brand = document.getElementById('companyName').value; 
+      const site = document.getElementById('websiteUrl').value; 
+      
+      // Reset state
+      dashboardShown = false;
+      stopPolling();
+      
+      document.getElementById('loadingBrandName').innerText = brand; 
+      document.getElementById('dashBrandName').innerText = brand; 
+      switchView('loading'); 
+      
+      try { 
+        const { job_id } = await createJob(brand, site); 
+        currentJobId = job_id;
+        const ok = await streamLogs(job_id); 
+        
+        if (!ok) { 
+          addLog('Simulation failed'); 
+          return;
+        }
+        
+        // Fetch final results if not already shown
+        if (!dashboardShown) {
+          const res = await fetchResult(job_id); 
+          currentResults = res; 
+          switchView('dashboard'); 
+          renderResults(res);
+        } else {
+          // Final fetch to ensure we have complete data
+          const res = await fetchResult(job_id);
+          currentResults = res;
+          renderResults(res);
+        }
+      } catch (err) { 
+        addLog('Error: ' + String(err));
+      }
+    }
+
     function downloadPDF() {
       if (!currentResults) { alert('No results available to download'); return; }
-      // Use browser print dialog which is styled by CSS @media print
       window.print();
     }
 
@@ -762,6 +1140,9 @@
     document.getElementById('modal-confirm').addEventListener('click', () => {
       closeModal();
       currentResults = null;
+      currentJobId = null;
+      dashboardShown = false;
+      stopPolling();
       document.getElementById('log-container').innerHTML = '';
       setProgress(0);
       document.getElementById('discoveryForm').reset();
@@ -769,7 +1150,11 @@
     });
 
     document.getElementById('downloadBtn').addEventListener('click', downloadPDF);
-    document.getElementById('brand-reset').addEventListener('click', () => { document.getElementById('discoveryForm').reset(); switchView('home') });
+    document.getElementById('brand-reset').addEventListener('click', () => { 
+      stopPolling();
+      document.getElementById('discoveryForm').reset(); 
+      switchView('home');
+    });
   </script>
 </body>
 

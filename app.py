@@ -197,14 +197,36 @@ async def phase_trials(brand: str, job: Dict[str, Any], trials: int, concurrency
 
 async def phase_aggregate(brand: str, job: Dict[str, Any]):
     job["logs"].append("> Stage 3: Analyzing Results with LLM Analyst...")
+    job["status"] = "analyzing"  # Intermediate status for progressive loading
+    
     buckets: Dict[int, List[str]] = {}
     for r in job["trial_results"]:
         buckets.setdefault(r["cand_idx"], []).append(r["llm_result_text"])
 
-    # Analyze all groups in parallel for faster processing
-    async def analyze_one(idx: int, responses: List[str]) -> Dict[str, Any]:
+    # Initialize paths with pending state for progressive display
+    job["paths"] = []
+    for idx, cand in enumerate(job["candidates"]):
+        job["paths"].append({
+            "persona_name": cand["persona_name"],
+            "trigger_prompt": cand["trigger_prompt"],
+            "frequency_count": 0,
+            "frequency_total": 5,
+            "win_rate": 0,
+            "attribution": "Analyzing...",
+            "competitors": [],
+            "sources": [],
+            "trial_responses": buckets.get(idx, []),
+            "analysis_complete": False,
+            "debug": {
+                "hidden_memory": cand["hidden_memory"],
+                "trigger_prompt": cand["trigger_prompt"],
+            },
+        })
+
+    # Analyze each persona and update paths progressively
+    async def analyze_one(idx: int, responses: List[str]):
         cand = job["candidates"][idx]
-        job["logs"].append(f"> Analyzing Group {idx+1}: {cand['persona_name']}...")
+        job["logs"].append(f"> Analyzing Persona {idx+1}: {cand['persona_name']}...")
 
         try:
             analysis_raw = await gen_medium(prompt_analyst(brand, cand["persona_name"], responses))
@@ -214,29 +236,26 @@ async def phase_aggregate(brand: str, job: Dict[str, Any]):
             else:
                 analysis = {"win_rate": 0, "competitors": [], "sources": [], "insight": "Analysis failed"}
         except Exception as e:
-             analysis = {"win_rate": 0, "competitors": [], "sources": [], "insight": f"Error: {str(e)}"}
+            analysis = {"win_rate": 0, "competitors": [], "sources": [], "insight": f"Error: {str(e)}"}
 
-        return {
-            "persona_name": cand["persona_name"],
-            "trigger_prompt": cand["trigger_prompt"],
+        # Update the path in place for progressive updates
+        job["paths"][idx].update({
             "frequency_count": int(analysis.get("win_rate", 0) / 20),
-            "frequency_total": 5,
             "win_rate": analysis.get("win_rate", 0),
             "attribution": analysis.get("insight", ""),
             "competitors": analysis.get("competitors", [])[:6],
             "sources": analysis.get("sources", []),
-            "trial_responses": responses,  # Include all trial responses
-            "debug": {
-                "hidden_memory": cand["hidden_memory"],
-                "trigger_prompt": cand["trigger_prompt"],
-            },
-        }
+            "analysis_complete": True,
+        })
+        
+        job["logs"].append(f"> ✓ Persona {idx+1} Complete: {analysis.get('win_rate', 0)}% win rate")
 
+    # Run analyses in parallel but update progressively
     tasks = [analyze_one(idx, responses) for idx, responses in buckets.items()]
-    paths = await asyncio.gather(*tasks)
+    await asyncio.gather(*tasks)
 
-    paths = sorted(paths, key=lambda p: p["win_rate"], reverse=True)
-    job["paths"] = paths
+    # Sort paths by win_rate after all complete
+    job["paths"] = sorted(job["paths"], key=lambda p: p["win_rate"], reverse=True)
 
     if paths:
         top = paths[0]
@@ -321,6 +340,39 @@ async def stream_job(job_id: str):
                 break
             await asyncio.sleep(0.2)
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+@app.get("/discover/jobs/{job_id}/partial")
+async def job_partial(job_id: str):
+    """Return partial results as they become available for progressive loading."""
+    job = JOBS.get(job_id)
+    if not job:
+        raise HTTPException(404, "job not found")
+    
+    # Return current state regardless of completion
+    return {
+        "status": job["status"],
+        "brand_name": job["brand_name"],
+        "candidates": job.get("candidates", []),
+        "paths": [{
+            "persona_name": p["persona_name"],
+            "trigger_prompt": p["trigger_prompt"],
+            "frequency_count": p.get("frequency_count", 0),
+            "frequency_total": p.get("frequency_total", 5),
+            "win_rate": p.get("win_rate", 0),
+            "attribution": p.get("attribution", ""),
+            "competitors": p.get("competitors", []),
+            "sources": p.get("sources", []),
+            "trial_responses": p.get("trial_responses", []),
+            "analysis_complete": p.get("analysis_complete", False)
+        } for p in job.get("paths", [])],
+        "top_persona": job.get("top_persona", ""),
+        "highest_win_rate": job.get("highest_win_rate", ""),
+        "top_competitor": job.get("top_competitor", ""),
+        "discovery_score": job.get("discovery_score"),
+        "score_level": job.get("score_level"),
+        "score_explanation": job.get("score_explanation"),
+        "score_breakdown": job.get("score_breakdown", []),
+    }
 
 @app.get("/discover/jobs/{job_id}/result")
 async def job_result(job_id: str):
