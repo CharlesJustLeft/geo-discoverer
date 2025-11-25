@@ -742,17 +742,27 @@
         
         es.onerror = (err) => { 
           console.error('Stream error:', err); 
-          addLog('Stream connection error - retrying...'); 
           es.close();
           currentEventSource = null;
+          stopPolling();
           // Cancel the job since we lost connection
           cancelCurrentJob();
+          // Show error modal
+          showErrorModal('Connection Lost', 'Lost connection to the server. The job has been cancelled. Please try again.');
           resolve(false); 
         }; 
+        
+        let lastFailedStage = '';  // Track which stage failed
         
         es.onmessage = (e) => { 
           const m = e.data || ''; 
           console.log('Stream message:', m); 
+          
+          // Capture stage info from error logs like "! FAILED at Stage 2: ..."
+          if (m.startsWith('! FAILED at ')) {
+            const match = m.match(/! FAILED at ([^:]+):/);
+            if (match) lastFailedStage = match[1];
+          }
           
           // Switch to dashboard when Stage 2 starts (earlier than before)
           if (m.includes('Stage 2') && !dashboardShown) {
@@ -769,8 +779,14 @@
           } else if (m.startsWith('> FAILED')) { 
             es.close(); 
             stopPolling();
-            // Show error modal to user
-            showErrorModal('Analysis Failed', 'The analysis encountered an error. This may be due to API overload. Please try again in a moment.');
+            // Cancel any remaining backend work
+            cancelCurrentJob();
+            // Show error modal with stage info
+            const stageInfo = lastFailedStage ? ` (${lastFailedStage})` : '';
+            showErrorModal('Analysis Failed' + stageInfo, 
+              lastFailedStage 
+                ? `The analysis failed during ${lastFailedStage}. This may be due to API overload. Please try again in a moment.`
+                : 'The analysis encountered an error. This may be due to API overload. Please try again in a moment.');
             resolve(false);
           } else if (m.startsWith('> CANCELLED')) { 
             es.close(); 

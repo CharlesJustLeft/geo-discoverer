@@ -455,6 +455,7 @@ async def create_job(req: CreateJobRequest, bg: BackgroundTasks):
         "website_url": n(req.website_url),
         "status": "running",
         "cancelled": False,  # Cancellation flag
+        "current_stage": "",  # Track which stage is running
         "logs": [],
         "candidates": [],
         "trial_results": [],
@@ -462,22 +463,28 @@ async def create_job(req: CreateJobRequest, bg: BackgroundTasks):
     }
     async def run():
         try:
+            JOBS[job_id]["current_stage"] = "Stage 1: Persona Discovery"
             await phase_backprop(brand, JOBS[job_id]["website_url"], JOBS[job_id])
             
+            JOBS[job_id]["current_stage"] = "Stage 2: Running Tests"
             trials = int(os.environ.get("TRIALS_PER_CANDIDATE", "5"))
             concurrency = int(os.environ.get("CONCURRENCY", "25"))
             await phase_trials(brand, JOBS[job_id], trials, concurrency)
             
+            JOBS[job_id]["current_stage"] = "Stage 3: Analyzing Results"
             await phase_aggregate(brand, JOBS[job_id])
             
+            JOBS[job_id]["current_stage"] = "Stage 4: Scoring Tribunal"
             await phase_tribunal(brand, JOBS[job_id])  # Stage 4: LLM Scoring Tribunal
             
         except JobCancelledException:
             # Job was cancelled - status already set by cancel endpoint
             JOBS[job_id]["logs"].append("> Job stopped (cancelled)")
         except Exception as e:
+            stage = JOBS[job_id].get("current_stage", "Unknown Stage")
             JOBS[job_id]["status"] = "failed"
-            JOBS[job_id]["logs"].append(f"! Error: {str(e)}")
+            JOBS[job_id]["failed_stage"] = stage
+            JOBS[job_id]["logs"].append(f"! FAILED at {stage}: {str(e)}")
             import traceback
             traceback.print_exc()
             
