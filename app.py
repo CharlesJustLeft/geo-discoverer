@@ -152,41 +152,71 @@ Output valid JSON only, no markdown."""
 
 # --- Stages ---
 
+# Timeout for Gemini API calls (in seconds)
+GEMINI_TIMEOUT = 90.0
+
 async def gen_high_search(prompt: str) -> str:
-    resp = await asyncio.to_thread(
-        client.models.generate_content,
-        model="gemini-3-pro-preview",
-        contents=prompt,
-        config=search_config,
-    )
-    return resp.text or ""
+    """Generate content with Google Search grounding. 90s timeout."""
+    try:
+        resp = await asyncio.wait_for(
+            asyncio.to_thread(
+                client.models.generate_content,
+                model="gemini-3-pro-preview",
+                contents=prompt,
+                config=search_config,
+            ),
+            timeout=GEMINI_TIMEOUT
+        )
+        return resp.text or ""
+    except asyncio.TimeoutError:
+        raise RuntimeError(f"Gemini API timed out after {GEMINI_TIMEOUT}s (gen_high_search)")
 
 async def gen_low(prompt: str) -> str:
-    resp = await asyncio.to_thread(
-        client.models.generate_content,
-        model="gemini-3-pro-preview",
-        contents=prompt,
-        config=search_config,
-    )
-    return resp.text or ""
+    """Generate content for trial simulations. 90s timeout."""
+    try:
+        resp = await asyncio.wait_for(
+            asyncio.to_thread(
+                client.models.generate_content,
+                model="gemini-3-pro-preview",
+                contents=prompt,
+                config=search_config,
+            ),
+            timeout=GEMINI_TIMEOUT
+        )
+        return resp.text or ""
+    except asyncio.TimeoutError:
+        raise RuntimeError(f"Gemini API timed out after {GEMINI_TIMEOUT}s (gen_low)")
 
 async def gen_medium(prompt: str) -> str:
-    resp = await asyncio.to_thread(
-        client.models.generate_content,
-        model="gemini-3-pro-preview",
-        contents=prompt,
-        config=search_config,
-    )
-    return resp.text or ""
+    """Generate content for analysis. 90s timeout."""
+    try:
+        resp = await asyncio.wait_for(
+            asyncio.to_thread(
+                client.models.generate_content,
+                model="gemini-3-pro-preview",
+                contents=prompt,
+                config=search_config,
+            ),
+            timeout=GEMINI_TIMEOUT
+        )
+        return resp.text or ""
+    except asyncio.TimeoutError:
+        raise RuntimeError(f"Gemini API timed out after {GEMINI_TIMEOUT}s (gen_medium)")
 
 async def gen_judge(prompt: str) -> str:
-    """Use gemini-2.5-flash for fast, accurate scoring judgments in the tribunal."""
-    resp = await asyncio.to_thread(
-        client.models.generate_content,
-        model="gemini-2.5-flash-preview-05-20",
-        contents=prompt,
-    )
-    return resp.text or ""
+    """Use gemini-2.5-flash for fast, accurate scoring judgments in the tribunal. 90s timeout."""
+    try:
+        resp = await asyncio.wait_for(
+            asyncio.to_thread(
+                client.models.generate_content,
+                model="gemini-2.5-flash-preview-05-20",
+                contents=prompt,
+            ),
+            timeout=GEMINI_TIMEOUT
+        )
+        return resp.text or ""
+    except asyncio.TimeoutError:
+        raise RuntimeError(f"Gemini API timed out after {GEMINI_TIMEOUT}s (gen_judge)")
 
 def calculate_discovery_score(paths: List[Dict[str, Any]], use_tribunal: bool = False) -> Dict[str, Any]:
     """Calculate discovery score using LLM-evaluated realism and reach (if available)."""
