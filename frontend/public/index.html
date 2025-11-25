@@ -620,13 +620,15 @@
                   <tr>
                     <th class="p-2">Persona</th>
                     <th class="p-2">Win Rate</th>
-                    <th class="p-2">Complexity</th>
+                    <th class="p-2">Realism</th>
+                    <th class="p-2">Reach</th>
                     <th class="p-2 text-right">Points</th>
                   </tr>
                 </thead>
                 <tbody id="score-table-body" class="text-gray-300 divide-y divide-gray-800"></tbody>
               </table>
             </div>
+            <p class="text-[10px] text-gray-500 mt-2">Formula: Points = Win Rate × Prompt Realism × Persona Reach × 20</p>
           </details>
         </div>
       </div>
@@ -931,6 +933,11 @@
         if (item.points >= 12) colorClass = 'bg-green-500';
         else if (item.points >= 6) colorClass = 'bg-yellow-500';
 
+        // Format realism and reach for display
+        const realism = item.prompt_realism !== undefined ? item.prompt_realism : (item.complexity_multiplier || 0.5);
+        const reach = item.persona_reach !== undefined ? item.persona_reach : 0.7;
+        const reachCategory = item.reach_category || 'Broad Vertical';
+
         const chartRow = document.createElement('div');
         chartRow.className = 'flex items-center gap-3 text-xs row-animate';
         chartRow.style.animationDelay = `${idx * 100}ms`;
@@ -943,11 +950,16 @@
         `;
         chartContainer.appendChild(chartRow);
 
+        // Color code realism and reach
+        const realismColor = realism >= 0.8 ? 'text-green-400' : realism >= 0.5 ? 'text-yellow-400' : 'text-red-400';
+        const reachColor = reach >= 0.8 ? 'text-green-400' : reach >= 0.5 ? 'text-yellow-400' : 'text-red-400';
+
         tableBody.innerHTML += `
           <tr>
             <td class="p-2">${item.persona}</td>
             <td class="p-2 font-mono">${item.win_rate}%</td>
-            <td class="p-2"><span class="bg-gray-800 px-1.5 py-0.5 rounded text-[10px]">${item.complexity_label} (x${item.complexity_multiplier})</span></td>
+            <td class="p-2"><span class="${realismColor}" title="${item.realism_reasoning || ''}">${realism.toFixed(1)}</span></td>
+            <td class="p-2"><span class="${reachColor}" title="${item.reach_reasoning || ''}">${reach.toFixed(1)} <span class="text-gray-500 text-[9px]">(${reachCategory})</span></span></td>
             <td class="p-2 text-right font-mono font-bold text-white">${item.points}</td>
           </tr>
         `;
@@ -1020,6 +1032,11 @@
         if (item.points >= 12) colorClass = 'bg-green-500';
         else if (item.points >= 6) colorClass = 'bg-yellow-500';
 
+        // Format realism and reach for display
+        const realism = item.prompt_realism !== undefined ? item.prompt_realism : (item.complexity_multiplier || 0.5);
+        const reach = item.persona_reach !== undefined ? item.persona_reach : 0.7;
+        const reachCategory = item.reach_category || 'Broad Vertical';
+
         chartContainer.innerHTML += `
           <div class="flex items-center gap-3 text-xs">
             <div class="w-24 truncate text-gray-400" title="${item.persona}">${item.persona}</div>
@@ -1030,11 +1047,16 @@
           </div>
         `;
 
+        // Color code realism and reach
+        const realismColor = realism >= 0.8 ? 'text-green-400' : realism >= 0.5 ? 'text-yellow-400' : 'text-red-400';
+        const reachColor = reach >= 0.8 ? 'text-green-400' : reach >= 0.5 ? 'text-yellow-400' : 'text-red-400';
+
         tableBody.innerHTML += `
           <tr>
             <td class="p-2">${item.persona}</td>
             <td class="p-2 font-mono">${item.win_rate}%</td>
-            <td class="p-2"><span class="bg-gray-800 px-1.5 py-0.5 rounded text-[10px]">${item.complexity_label} (x${item.complexity_multiplier})</span></td>
+            <td class="p-2"><span class="${realismColor}" title="${item.realism_reasoning || ''}">${realism.toFixed(1)}</span></td>
+            <td class="p-2"><span class="${reachColor}" title="${item.reach_reasoning || ''}">${reach.toFixed(1)} <span class="text-gray-500 text-[9px]">(${reachCategory})</span></span></td>
             <td class="p-2 text-right font-mono font-bold text-white">${item.points}</td>
           </tr>
         `;

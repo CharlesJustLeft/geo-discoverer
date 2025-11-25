@@ -88,6 +88,52 @@ def prompt_analyst(brand: str, persona: str, responses: List[str]) -> str:
         "Output JSON only."
     )
 
+def prompt_scoring_tribunal(brand: str, paths: List[Dict[str, Any]]) -> str:
+    """Generate prompt for LLM to evaluate realism and reach of each persona."""
+    personas_text = "\n".join([
+        f"Persona {i+1}:\n"
+        f"  - Name: {p['persona_name']}\n"
+        f"  - Trigger Prompt: \"{p['trigger_prompt']}\"\n"
+        f"  - Win Rate: {p.get('win_rate', 0)}%"
+        for i, p in enumerate(paths)
+    ])
+    
+    return f"""You are an expert in AI search behavior and market research evaluating brand visibility.
+
+Brand being evaluated: "{brand}"
+
+Here are 5 user personas that were tested:
+
+{personas_text}
+
+For EACH persona, evaluate two dimensions:
+
+1. **Prompt Realism** (0.0 - 1.0): How likely is a real human to type this exact query into ChatGPT/Claude/Gemini?
+   - 1.0 = Very natural, common query (e.g., "best crm for small business")
+   - 0.7 = Natural but specific query
+   - 0.5 = Somewhat realistic but overly detailed
+   - 0.2 = Robotic, overly specific, or unnatural phrasing that no human would type
+   
+2. **Persona Reach** (0.0 - 1.0): How large is this user segment in the real world?
+   - 1.0 = Universal/Mass Market (e.g., "Student", "Small Business Owner", "Job Seeker", "Parent")
+   - 0.7 = Broad Vertical (e.g., "SaaS CTO", "Marketing Freelancer", "E-commerce Seller")
+   - 0.4 = Niche/Long Tail (e.g., "Cobol Mainframe Maintainer", "Dental Practice CFO")
+
+Return a JSON array with exactly 5 objects (one per persona, in the same order):
+[
+  {{
+    "persona_name": "exact name from input",
+    "prompt_realism": 0.0-1.0,
+    "realism_reasoning": "One sentence explanation",
+    "persona_reach": 0.0-1.0,
+    "reach_category": "Universal" or "Broad Vertical" or "Niche",
+    "reach_reasoning": "One sentence explanation"
+  }}
+]
+
+Be strict and objective. A query asking for "sources" or "URLs" is still realistic if the core question is natural.
+Output valid JSON only, no markdown."""
+
 # --- Stages ---
 
 async def gen_high_search(prompt: str) -> str:
@@ -117,38 +163,69 @@ async def gen_medium(prompt: str) -> str:
     )
     return resp.text or ""
 
-def calculate_discovery_score(paths: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Calculate composite discovery score based on prompt complexity and win rates."""
+async def gen_judge(prompt: str) -> str:
+    """Use gemini-2.5-flash for fast, accurate scoring judgments in the tribunal."""
+    resp = await asyncio.to_thread(
+        client.models.generate_content,
+        model="gemini-2.5-flash-preview-05-20",
+        contents=prompt,
+    )
+    return resp.text or ""
+
+def calculate_discovery_score(paths: List[Dict[str, Any]], use_tribunal: bool = False) -> Dict[str, Any]:
+    """Calculate discovery score using LLM-evaluated realism and reach (if available)."""
     total_score = 0.0
     breakdown = []
     
     for path in paths:
-        # Factor 1: Prompt complexity score
-        trigger = path.get("trigger_prompt", "")
-        word_count = len(trigger.split())
-
-        if word_count <= 5:
-            complexity = 1.0; c_label = "Simple"  # Simple, natural queries
-        elif word_count <= 10:
-            complexity = 0.8; c_label = "Medium" # Adjusted from 0.6 for better balance
-        else:
-            complexity = 0.5; c_label = "Complex" # Adjusted from 0.3
-
-        # Factor 2: Win rate (normalize to 0-1)
-        win_rate = path.get("win_rate", 0)
-
-        # Max 20 points per persona
-        # Points = (Win Rate %) * Complexity * 20
-        points = (win_rate / 100.0) * complexity * 20.0
-        total_score += points
+        win_rate = path.get("win_rate", 0) / 100.0  # Normalize to 0-1
         
-        breakdown.append({
-            "persona": path.get("persona_name"),
-            "win_rate": win_rate,
-            "complexity_label": c_label,
-            "complexity_multiplier": complexity,
-            "points": round(points, 1)
-        })
+        if use_tribunal and "prompt_realism" in path:
+            # New formula: Win Rate × Realism × Reach × 20
+            realism = path.get("prompt_realism", 0.5)
+            reach = path.get("persona_reach", 0.5)
+            reach_category = path.get("reach_category", "Broad Vertical")
+            realism_reasoning = path.get("realism_reasoning", "")
+            reach_reasoning = path.get("reach_reasoning", "")
+            
+            points = win_rate * realism * reach * 20.0
+            
+            breakdown.append({
+                "persona": path.get("persona_name"),
+                "win_rate": path.get("win_rate", 0),
+                "prompt_realism": realism,
+                "realism_reasoning": realism_reasoning,
+                "persona_reach": reach,
+                "reach_category": reach_category,
+                "reach_reasoning": reach_reasoning,
+                "points": round(points, 1)
+            })
+        else:
+            # Fallback to old word-count based complexity
+            trigger = path.get("trigger_prompt", "")
+            word_count = len(trigger.split())
+
+            if word_count <= 5:
+                complexity = 1.0; c_label = "Simple"
+            elif word_count <= 10:
+                complexity = 0.8; c_label = "Medium"
+            else:
+                complexity = 0.5; c_label = "Complex"
+
+            points = win_rate * complexity * 20.0
+            
+            breakdown.append({
+                "persona": path.get("persona_name"),
+                "win_rate": path.get("win_rate", 0),
+                "prompt_realism": complexity,  # Use complexity as fallback
+                "realism_reasoning": f"Word count: {word_count} ({c_label})",
+                "persona_reach": 0.7,  # Default to Broad Vertical
+                "reach_category": "Broad Vertical",
+                "reach_reasoning": "Default estimate (tribunal not run)",
+                "points": round(points, 1)
+            })
+        
+        total_score += points
 
     # Scale to 0-100
     discovery_score = int(total_score)
@@ -288,11 +365,53 @@ async def phase_aggregate(brand: str, job: Dict[str, Any]):
         job["highest_win_rate"] = "0%"
         job["top_competitor"] = ""
 
-    # Calculate Discovery Score
-    score_data = calculate_discovery_score(job["paths"])
+    job["logs"].append("Stage 3 Complete. Proceeding to Scoring Tribunal...")
+
+async def phase_tribunal(brand: str, job: Dict[str, Any]):
+    """Stage 4: LLM Scoring Tribunal - evaluate prompt realism and persona reach."""
+    check_cancelled(job)
+    job["logs"].append("Stage 4: Scoring Tribunal evaluating prompt quality...")
+    
+    tribunal_success = False
+    try:
+        raw = await gen_judge(prompt_scoring_tribunal(brand, job["paths"]))
+        m = re.search(r"\[.*\]", raw, re.S)
+        if m:
+            evaluations = json.loads(m.group(0))
+            
+            # Update paths with tribunal scores (match by index since order is preserved)
+            for i, eval_data in enumerate(evaluations):
+                if i < len(job["paths"]):
+                    job["paths"][i]["prompt_realism"] = float(eval_data.get("prompt_realism", 0.5))
+                    job["paths"][i]["realism_reasoning"] = eval_data.get("realism_reasoning", "")
+                    job["paths"][i]["persona_reach"] = float(eval_data.get("persona_reach", 0.5))
+                    job["paths"][i]["reach_category"] = eval_data.get("reach_category", "Broad Vertical")
+                    job["paths"][i]["reach_reasoning"] = eval_data.get("reach_reasoning", "")
+                    
+                    job["logs"].append(f"✓ {job['paths'][i]['persona_name']}: Realism={eval_data.get('prompt_realism', 0.5)}, Reach={eval_data.get('reach_category', 'N/A')}")
+            
+            tribunal_success = True
+            job["logs"].append("Tribunal evaluation complete.")
+        else:
+            raise RuntimeError("Tribunal did not return valid JSON array")
+            
+    except JobCancelledException:
+        raise
+    except Exception as e:
+        # Fallback to default values if tribunal fails
+        job["logs"].append(f"! Tribunal error: {str(e)}. Using fallback scoring.")
+        for p in job["paths"]:
+            p["prompt_realism"] = 0.5
+            p["realism_reasoning"] = "Tribunal unavailable - using default"
+            p["persona_reach"] = 0.7
+            p["reach_category"] = "Broad Vertical"
+            p["reach_reasoning"] = "Tribunal unavailable - using default"
+    
+    # Calculate Discovery Score with tribunal data
+    score_data = calculate_discovery_score(job["paths"], use_tribunal=tribunal_success)
     job["discovery_score"] = score_data["score"]
     job["score_level"] = score_data["level"]
-    job["score_breakdown"] = score_data["breakdown"] # Store breakdown
+    job["score_breakdown"] = score_data["breakdown"]
 
     # Call AI for explanation
     job["logs"].append("Generating Strategic Breakdown...")
@@ -303,7 +422,6 @@ async def phase_aggregate(brand: str, job: Dict[str, Any]):
         job["score_explanation"] = "Analysis unavailable."
 
     job["logs"].append(f"Discovery Score: {score_data['score']}/100 ({score_data['level']})")
-
     job["logs"].append("Report Ready.")
     job["status"] = "completed"
 
@@ -335,6 +453,8 @@ async def create_job(req: CreateJobRequest, bg: BackgroundTasks):
             await phase_trials(brand, JOBS[job_id], trials, concurrency)
             
             await phase_aggregate(brand, JOBS[job_id])
+            
+            await phase_tribunal(brand, JOBS[job_id])  # Stage 4: LLM Scoring Tribunal
             
         except JobCancelledException:
             # Job was cancelled - status already set by cancel endpoint
