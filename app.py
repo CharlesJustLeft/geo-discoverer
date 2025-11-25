@@ -153,71 +153,89 @@ CRITICAL: Output ONLY valid JSON. No markdown code blocks, no trailing commas, n
 
 # --- Stages ---
 
-# Timeout for Gemini API calls (in seconds)
-GEMINI_TIMEOUT = 90.0
+# Timeout and retry settings for Gemini API calls
+GEMINI_TIMEOUT = 120.0  # 2 minutes per attempt
+MAX_RETRIES = 3  # Retry up to 3 times on timeout/error
+
+async def _call_gemini_with_retry(model: str, prompt: str, config=None, func_name: str = ""):
+    """Call Gemini API with retry logic for timeouts and transient errors."""
+    last_error = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            if config:
+                resp = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        client.models.generate_content,
+                        model=model,
+                        contents=prompt,
+                        config=config,
+                    ),
+                    timeout=GEMINI_TIMEOUT
+                )
+            else:
+                resp = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        client.models.generate_content,
+                        model=model,
+                        contents=prompt,
+                    ),
+                    timeout=GEMINI_TIMEOUT
+                )
+            return resp.text or ""
+        except asyncio.TimeoutError:
+            last_error = f"Timeout after {GEMINI_TIMEOUT}s"
+            if attempt < MAX_RETRIES - 1:
+                wait_time = (attempt + 1) * 5  # 5s, 10s, 15s backoff
+                await asyncio.sleep(wait_time)
+                continue
+        except Exception as e:
+            error_str = str(e)
+            # Retry on transient errors (503, 500, rate limits)
+            if any(code in error_str for code in ["503", "500", "429", "overloaded", "UNAVAILABLE"]):
+                last_error = error_str
+                if attempt < MAX_RETRIES - 1:
+                    wait_time = (attempt + 1) * 5
+                    await asyncio.sleep(wait_time)
+                    continue
+            raise  # Re-raise non-transient errors immediately
+    
+    raise RuntimeError(f"Gemini API failed after {MAX_RETRIES} attempts ({func_name}): {last_error}")
 
 async def gen_high_search(prompt: str) -> str:
-    """Generate content with Google Search grounding. 90s timeout. Uses gemini-2.0-flash for stability."""
-    try:
-        resp = await asyncio.wait_for(
-            asyncio.to_thread(
-                client.models.generate_content,
-                model="gemini-2.0-flash",
-                contents=prompt,
-                config=search_config,
-            ),
-            timeout=GEMINI_TIMEOUT
-        )
-        return resp.text or ""
-    except asyncio.TimeoutError:
-        raise RuntimeError(f"Gemini API timed out after {GEMINI_TIMEOUT}s (gen_high_search)")
+    """Generate content with Google Search grounding using gemini-3-pro-preview."""
+    return await _call_gemini_with_retry(
+        model="gemini-3-pro-preview",
+        prompt=prompt,
+        config=search_config,
+        func_name="gen_high_search"
+    )
 
 async def gen_low(prompt: str) -> str:
-    """Generate content for trial simulations. 90s timeout. Uses gemini-2.0-flash for stability."""
-    try:
-        resp = await asyncio.wait_for(
-            asyncio.to_thread(
-                client.models.generate_content,
-                model="gemini-2.0-flash",
-                contents=prompt,
-                config=search_config,
-            ),
-            timeout=GEMINI_TIMEOUT
-        )
-        return resp.text or ""
-    except asyncio.TimeoutError:
-        raise RuntimeError(f"Gemini API timed out after {GEMINI_TIMEOUT}s (gen_low)")
+    """Generate content for trial simulations using gemini-3-pro-preview."""
+    return await _call_gemini_with_retry(
+        model="gemini-3-pro-preview",
+        prompt=prompt,
+        config=search_config,
+        func_name="gen_low"
+    )
 
 async def gen_medium(prompt: str) -> str:
-    """Generate content for analysis. 90s timeout. Uses gemini-2.0-flash for stability."""
-    try:
-        resp = await asyncio.wait_for(
-            asyncio.to_thread(
-                client.models.generate_content,
-                model="gemini-2.0-flash",
-                contents=prompt,
-                config=search_config,
-            ),
-            timeout=GEMINI_TIMEOUT
-        )
-        return resp.text or ""
-    except asyncio.TimeoutError:
-        raise RuntimeError(f"Gemini API timed out after {GEMINI_TIMEOUT}s (gen_medium)")
+    """Generate content for analysis using gemini-3-pro-preview."""
+    return await _call_gemini_with_retry(
+        model="gemini-3-pro-preview",
+        prompt=prompt,
+        config=search_config,
+        func_name="gen_medium"
+    )
 
 async def gen_judge(prompt: str) -> str:
-    """Use gemini-2.5-flash for accurate scoring judgments in the tribunal. 90s timeout."""
-    try:
-        resp = await asyncio.wait_for(
-            asyncio.to_thread(
-                client.models.generate_content,
-                model="gemini-2.5-flash",
-                contents=prompt,
-            ),
-            timeout=GEMINI_TIMEOUT
-        )
-        return resp.text or ""
-    except asyncio.TimeoutError:
-        raise RuntimeError(f"Gemini API timed out after {GEMINI_TIMEOUT}s (gen_judge)")
+    """Use gemini-2.5-flash for accurate scoring judgments in the tribunal."""
+    return await _call_gemini_with_retry(
+        model="gemini-2.5-flash",
+        prompt=prompt,
+        config=None,
+        func_name="gen_judge"
+    )
 
 def calculate_discovery_score(paths: List[Dict[str, Any]], use_tribunal: bool = False) -> Dict[str, Any]:
     """Calculate discovery score using LLM-evaluated realism and reach (if available)."""
