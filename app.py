@@ -148,7 +148,8 @@ Return a JSON array with exactly 5 objects (one per persona, in the same order):
 ]
 
 Be strict and objective. A query asking for "sources" or "URLs" is still realistic if the core question is natural.
-Output valid JSON only, no markdown."""
+
+CRITICAL: Output ONLY valid JSON. No markdown code blocks, no trailing commas, no comments. Start with [ and end with ]."""
 
 # --- Stages ---
 
