@@ -661,6 +661,9 @@
     </div>
   </div>
   <script>
+    // Direct connection to Railway backend (bypasses Vercel's 30s timeout)
+    const BACKEND_URL = 'https://geo-discoverer-production.up.railway.app';
+    
     const views = { home: document.getElementById('view-home'), loading: document.getElementById('view-loading'), dashboard: document.getElementById('view-dashboard') };
     let currentJobId = null;
     let currentResults = null;
@@ -705,19 +708,23 @@
           currentEventSource = null;
         }
         
-        const es = new EventSource('/api/discover/stream?job_id=' + job_id);
+        // Connect directly to Railway backend (bypasses Vercel's 30s timeout)
+        const es = new EventSource(`${BACKEND_URL}/discover/jobs/${job_id}/stream`);
         currentEventSource = es;  // Store reference for cleanup
         let i = 0; 
         
         es.onopen = () => { 
-          console.log('Stream connected'); 
+          console.log('Stream connected directly to Railway'); 
           addLog('Connected to backend...'); 
         }; 
         
         es.onerror = (err) => { 
           console.error('Stream error:', err); 
-          addLog('Stream connection error'); 
-          es.close(); 
+          addLog('Stream connection error - retrying...'); 
+          es.close();
+          currentEventSource = null;
+          // Cancel the job since we lost connection
+          cancelCurrentJob();
           resolve(false); 
         }; 
         
@@ -1115,13 +1122,33 @@
       
       if (currentJobId) {
         try {
-          await fetch('/api/discover/cancel?job_id=' + currentJobId, { method: 'POST' });
+          // Call Railway backend directly to cancel
+          await fetch(`${BACKEND_URL}/discover/jobs/${currentJobId}/cancel`, { method: 'POST' });
           console.log('Cancelled previous job:', currentJobId);
         } catch (err) {
           console.log('Could not cancel previous job:', err);
         }
       }
     }
+    
+    // Cancel job when user leaves the page (closes tab, navigates away, etc.)
+    window.addEventListener('beforeunload', (e) => {
+      if (currentJobId) {
+        // Use fetch with keepalive for reliable delivery during page unload
+        fetch(`${BACKEND_URL}/discover/jobs/${currentJobId}/cancel`, { 
+          method: 'POST',
+          keepalive: true 
+        });
+        console.log('Cancelling job on page unload:', currentJobId);
+      }
+    });
+    
+    // Also cancel if user uses browser back button while on loading page
+    window.addEventListener('popstate', (e) => {
+      if (currentJobId && !views.loading.classList.contains('hidden')) {
+        cancelCurrentJob();
+      }
+    });
 
     async function startSimulation(e) { 
       e.preventDefault(); 

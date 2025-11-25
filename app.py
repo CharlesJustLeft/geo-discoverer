@@ -6,6 +6,7 @@ import json
 from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from google import genai
 from google.genai import types
@@ -16,6 +17,21 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 app = FastAPI(title="GEO Discoverer Backend")
+
+# Add CORS middleware to allow direct connections from frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://geo-discoverer.vercel.app",
+        "https://geo-discoverer-*.vercel.app",
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Enable Google Search grounding for real-time web access
 grounding_tool = types.Tool(google_search=types.GoogleSearch())
