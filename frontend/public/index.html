@@ -460,12 +460,11 @@
       <h1 class="hero-title mb-6 text-white">SEE HOW AI SHOWS<br>YOUR BRAND <span class="highlight-blue">TO
           PEOPLE</span>
       </h1>
-      <p class="text-gray-400 text-lg max-w-lg leading-relaxed mb-8">Stop guessing. See exactly who finds your brand on
-        ChatGPT, Claude, Gemini, and how.</p>
+      <p class="text-gray-400 text-lg max-w-lg leading-relaxed mb-8">For small businesses and startups: understand who finds your brand on ChatGPT, Claude, Gemini—and how.</p>
       <div class="flex flex-wrap gap-4 text-sm font-mono text-gray-500">
-        <div class="flex items-center gap-2"><span class="text-green-500">✓</span> 25 Parallel Sims</div>
+        <div class="flex items-center gap-2"><span class="text-green-500">✓</span> 25 Parallel Tests</div>
         <div class="flex items-center gap-2"><span class="text-green-500">✓</span> Agentic Evals</div>
-        <div class="flex items-center gap-2"><span class="text-green-500">✓</span> Context Simulator</div>
+        <div class="flex items-center gap-2"><span class="text-green-500">✓</span> AI Visibility Report</div>
       </div>
     </div>
     <div class="flex-1 w-full max-w-md">
@@ -623,7 +622,8 @@
     </div>
 
     <!-- NEW: Score Breakdown Section -->
-    <div class="bg-[#1F2937] border border-[#374151] rounded-xl p-6 mb-12">
+    <div class="bg-[#1F2937] border border-[#374151] rounded-xl p-6 mb-12 relative overflow-hidden group">
+      <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity text-6xl">🧠</div>
       <h3 class="text-2xl font-bold font-heading mb-6">Strategic Analysis</h3>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -669,7 +669,7 @@
 
     <div class="mb-12">
       <h3 class="text-2xl font-bold font-heading mb-2">Discovery Paths</h3>
-      <p class="text-gray-400 mb-6">We simulated 5 User Personas to find your "Golden Path".</p>
+      <p class="text-gray-400 mb-6">We tested 5 User Personas to find your "Golden Path".</p>
       <div class="overflow-hidden rounded-xl border border-gray-800 bg-[#161B22]">
         <table class="w-full text-left border-collapse geo-table">
           <thead>
@@ -701,7 +701,7 @@
     let currentResults = null;
     let pollingInterval = null;
     let dashboardShown = false;
-    let currentEventSource = null;  // Track EventSource to close on new simulation
+    let currentEventSource = null;  // Track EventSource to close on new analysis
 
     function switchView(v) { 
       Object.values(views).forEach(el => el.classList.add('hidden')); 
