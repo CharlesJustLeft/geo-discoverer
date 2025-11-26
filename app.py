@@ -17,7 +17,7 @@ if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY must be set")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
-app = FastAPI(title="GEO Discoverer Backend")
+app = FastAPI(title="GEO Discoverer Backend", version="2.0.0")
 
 # --- Job Queue System ---
 # To respect Gemini's 25 RPM limit, we process jobs one at a time
