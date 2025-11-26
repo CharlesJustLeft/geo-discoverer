@@ -101,7 +101,7 @@ def prompt_score_explanation(brand: str, score: int, level: str, paths: List[Dic
         f"Performance by Persona:\n{summary}\n\n"
         "Return JSON with:\n"
         "1. `explanation`: 2-sentence strategic analysis (which personas drive visibility, which fail)\n"
-        "2. `main_rival`: The single biggest competitive threat across all personas (or 'None' if no clear rival)\n"
+        "2. `main_rival`: Pick ONE competitor as the biggest threat. Never say 'None' - choose based on frequency, market position, or which rival appears in weak personas.\n"
         "3. `rival_reason`: One sentence explaining why this competitor is the main threat\n\n"
         "Be direct and analytical. Output valid JSON only."
     )
