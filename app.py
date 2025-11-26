@@ -3,6 +3,7 @@ import uuid
 import re
 import asyncio
 import json
+from collections import deque
 from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -17,6 +18,13 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 app = FastAPI(title="GEO Discoverer Backend")
+
+# --- Job Queue System ---
+# To respect Gemini's 25 RPM limit, we process jobs one at a time
+JOB_QUEUE: deque = deque()  # Queue of job_ids waiting to be processed
+QUEUE_LOCK = asyncio.Lock()  # Async lock for queue operations
+CURRENT_RUNNING_JOB: Optional[str] = None  # Currently executing job_id
+QUEUE_PROCESSOR_RUNNING = False  # Flag to prevent multiple processors
 
 # Add CORS middleware to allow direct connections from frontend
 app.add_middleware(
@@ -492,53 +500,152 @@ async def phase_tribunal(brand: str, job: Dict[str, Any]):
 
 # --- API ---
 
+async def run_single_job(job_id: str):
+    """Execute a single job (all 4 stages)."""
+    job = JOBS.get(job_id)
+    if not job:
+        return
+    
+    brand = job["brand_name"]
+    
+    try:
+        job["status"] = "running"
+        job["logs"].append("Your analysis is starting...")
+        
+        job["current_stage"] = "Stage 1: Persona Discovery"
+        await phase_backprop(brand, job["website_url"], job)
+        
+        job["current_stage"] = "Stage 2: Running Tests"
+        trials = int(os.environ.get("TRIALS_PER_CANDIDATE", "5"))
+        concurrency = int(os.environ.get("CONCURRENCY", "25"))
+        await phase_trials(brand, job, trials, concurrency)
+        
+        job["current_stage"] = "Stage 3: Analyzing Results"
+        await phase_aggregate(brand, job)
+        
+        job["current_stage"] = "Stage 4: Scoring Tribunal"
+        await phase_tribunal(brand, job)
+        
+    except JobCancelledException:
+        job["logs"].append("> Job stopped (cancelled)")
+    except Exception as e:
+        stage = job.get("current_stage", "Unknown Stage")
+        job["status"] = "failed"
+        job["failed_stage"] = stage
+        job["logs"].append(f"! FAILED at {stage}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
+async def process_job_queue():
+    """Process jobs from the queue one at a time."""
+    global CURRENT_RUNNING_JOB, QUEUE_PROCESSOR_RUNNING
+    
+    async with QUEUE_LOCK:
+        if QUEUE_PROCESSOR_RUNNING:
+            return  # Another processor is already running
+        QUEUE_PROCESSOR_RUNNING = True
+    
+    try:
+        while True:
+            # Get next job from queue
+            async with QUEUE_LOCK:
+                if not JOB_QUEUE:
+                    CURRENT_RUNNING_JOB = None
+                    break  # Queue empty, stop processing
+                
+                job_id = JOB_QUEUE[0]  # Peek at first job
+                CURRENT_RUNNING_JOB = job_id
+            
+            # Check if job was cancelled while waiting
+            job = JOBS.get(job_id)
+            if job and job.get("cancelled"):
+                async with QUEUE_LOCK:
+                    if JOB_QUEUE and JOB_QUEUE[0] == job_id:
+                        JOB_QUEUE.popleft()
+                continue
+            
+            # Run the job
+            await run_single_job(job_id)
+            
+            # Remove completed job from queue
+            async with QUEUE_LOCK:
+                if JOB_QUEUE and JOB_QUEUE[0] == job_id:
+                    JOB_QUEUE.popleft()
+                    
+    finally:
+        async with QUEUE_LOCK:
+            QUEUE_PROCESSOR_RUNNING = False
+            CURRENT_RUNNING_JOB = None
+
 @app.post("/discover/jobs")
 async def create_job(req: CreateJobRequest, bg: BackgroundTasks):
     brand = n(req.brand_name)
     if not brand:
         raise HTTPException(400, "brand_name required")
+    
     job_id = uuid.uuid4().hex
     JOBS[job_id] = {
         "id": job_id,
         "brand_name": brand,
         "website_url": n(req.website_url),
-        "status": "running",
-        "cancelled": False,  # Cancellation flag
-        "current_stage": "",  # Track which stage is running
+        "status": "queued",  # Start as queued, not running
+        "cancelled": False,
+        "current_stage": "",
         "logs": [],
         "candidates": [],
         "trial_results": [],
         "paths": [],
     }
-    async def run():
+    
+    # Add to queue and get position
+    async with QUEUE_LOCK:
+        JOB_QUEUE.append(job_id)
+        position = len(JOB_QUEUE)
+    
+    # Update job with queue info
+    if position == 1:
+        JOBS[job_id]["logs"].append("Starting your analysis...")
+    else:
+        JOBS[job_id]["logs"].append(f"You're #{position} in the queue. Estimated wait: ~{(position-1) * 2} minutes.")
+    
+    # Start queue processor if not already running
+    bg.add_task(process_job_queue)
+    
+    return {"job_id": job_id, "queue_position": position}
+
+@app.get("/discover/jobs/{job_id}/queue")
+async def get_queue_position(job_id: str):
+    """Get current queue position for a job."""
+    job = JOBS.get(job_id)
+    if not job:
+        raise HTTPException(404, "job not found")
+    
+    # Check if job is currently running
+    if CURRENT_RUNNING_JOB == job_id:
+        return {
+            "position": 0,
+            "status": "running",
+            "estimated_wait_minutes": 0
+        }
+    
+    # Check if job is in queue
+    async with QUEUE_LOCK:
         try:
-            JOBS[job_id]["current_stage"] = "Stage 1: Persona Discovery"
-            await phase_backprop(brand, JOBS[job_id]["website_url"], JOBS[job_id])
-            
-            JOBS[job_id]["current_stage"] = "Stage 2: Running Tests"
-            trials = int(os.environ.get("TRIALS_PER_CANDIDATE", "5"))
-            concurrency = int(os.environ.get("CONCURRENCY", "25"))
-            await phase_trials(brand, JOBS[job_id], trials, concurrency)
-            
-            JOBS[job_id]["current_stage"] = "Stage 3: Analyzing Results"
-            await phase_aggregate(brand, JOBS[job_id])
-            
-            JOBS[job_id]["current_stage"] = "Stage 4: Scoring Tribunal"
-            await phase_tribunal(brand, JOBS[job_id])  # Stage 4: LLM Scoring Tribunal
-            
-        except JobCancelledException:
-            # Job was cancelled - status already set by cancel endpoint
-            JOBS[job_id]["logs"].append("> Job stopped (cancelled)")
-        except Exception as e:
-            stage = JOBS[job_id].get("current_stage", "Unknown Stage")
-            JOBS[job_id]["status"] = "failed"
-            JOBS[job_id]["failed_stage"] = stage
-            JOBS[job_id]["logs"].append(f"! FAILED at {stage}: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            
-    bg.add_task(run)
-    return {"job_id": job_id}
+            queue_list = list(JOB_QUEUE)
+            position = queue_list.index(job_id) + 1
+            estimated_wait = (position - 1) * 2  # ~2 min per job ahead
+            return {
+                "position": position,
+                "status": "queued",
+                "estimated_wait_minutes": estimated_wait
+            }
+        except ValueError:
+            # Job not in queue - either completed, failed, or cancelled
+            return {
+                "position": -1,
+                "status": job.get("status", "unknown"),
+                "estimated_wait_minutes": 0
+            }
 
 @app.get("/discover/jobs/{job_id}/stream")
 async def stream_job(job_id: str):
